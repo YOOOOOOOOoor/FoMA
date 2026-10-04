@@ -1,0 +1,505 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+:root {
+  font-family: "DM Sans", sans-serif;
+  color: #e9efeb;
+  background: #0e1718;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(ellipse at 50% -20%, #23383a 0, transparent 50%), #0e1718;
+}
+.app-shell {
+  min-height: 100vh;
+}
+.topbar {
+  height: 68px;
+  border-bottom: 1px solid #2a3938;
+  display: flex;
+  align-items: center;
+  padding: 0 max(calc((100vw - 1180px) / 2), 24px);
+  gap: 30px;
+  background: #111d1e;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Space Grotesk";
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.brand small {
+  display: block;
+  color: #829592;
+  font: 500 9px "DM Mono";
+  letter-spacing: 0.17em;
+  margin-top: 2px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  background: #3585da;
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 17px;
+}
+.mode-label,
+.eyebrow,
+.feed-count {
+  font: 500 10px "DM Mono";
+  letter-spacing: 0.12em;
+  color: #8a9f9b;
+}
+.mode-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.mode-label i,
+.live i {
+  width: 7px;
+  height: 7px;
+  background: #65d19a;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #65d19966;
+}
+.restart {
+  margin-left: auto;
+  border: 1px solid #405553;
+  background: #1a2929;
+  color: #dce7e0;
+  border-radius: 6px;
+  padding: 9px 14px;
+  font: 500 11px "DM Mono";
+  cursor: pointer;
+}
+.restart:hover {
+  background: #273a38;
+}
+.content {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 31px 24px 24px;
+}
+.heading,
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.eyebrow {
+  font-size: 9px;
+  color: #7e9990;
+}
+.heading h1 {
+  font: 600 28px "Space Grotesk";
+  margin: 6px 0 4px;
+  letter-spacing: -0.04em;
+}
+.heading p {
+  color: #91a49e;
+  font-size: 12px;
+}
+.live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #335648;
+  color: #8de0b1;
+  border-radius: 4px;
+  padding: 7px 10px;
+  font: 500 9px "DM Mono";
+  letter-spacing: 0.12em;
+}
+.match-card {
+  position: relative;
+  margin-top: 20px;
+  border: 1px solid #344844;
+  border-radius: 12px;
+  background: #142120;
+  overflow: hidden;
+  box-shadow: 0 18px 55px #060b0d66;
+}
+.scoreboard {
+  height: 75px;
+  display: grid;
+  grid-template-columns: 1fr 150px 1fr;
+  align-items: center;
+  padding: 0 30px;
+  border-bottom: 1px solid #293c37;
+}
+.team-name {
+  font: 700 12px "Space Grotesk";
+  letter-spacing: 0.08em;
+}
+.team-name i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #478ed9;
+  margin-right: 10px;
+  box-shadow: 0 0 10px #529ae066;
+}
+.team-name span {
+  margin-left: 10px;
+  color: #829790;
+  font: 500 9px "DM Mono";
+}
+.match-clock {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.match-clock strong {
+  font: 600 23px "Space Grotesk";
+  letter-spacing: 0.09em;
+}
+.match-clock small {
+  font: 9px "DM Mono";
+  letter-spacing: 0.09em;
+  color: #78908a;
+}
+.possession {
+  text-align: right;
+  color: #91b9a3;
+  font: 500 9px "DM Mono";
+  letter-spacing: 0.1em;
+}
+.pitch-wrap {
+  padding: 14px 17px 9px;
+}
+.pitch {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background: #247b50;
+}
+.lines rect,
+.lines line,
+.lines circle,
+.lines path {
+  fill: none;
+  stroke: #eff8eab0;
+  stroke-width: 1.5;
+}
+.lines .spot {
+  fill: #eff8eab0;
+  stroke: none;
+}
+.lines .goal {
+  fill: #ecf3e8;
+  stroke: white;
+}
+.player .halo {
+  fill: #07120db0;
+}
+.player .disc {
+  fill: #3186dc;
+  stroke: #f7f5ec;
+  stroke-width: 2;
+}
+.player .player-4 {
+  fill: #1c67b7;
+  stroke: #cde6ff;
+  stroke-width: 2.5;
+}
+.player text {
+  fill: white;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font: 700 9px "DM Sans";
+  pointer-events: none;
+}
+.player .facing {
+  stroke: #dceeff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.player.running .halo {
+  stroke: #d8ffe4;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+.ball circle {
+  fill: #fffdf3;
+  stroke: #26382c;
+  stroke-width: 1.8;
+}
+.ball path {
+  stroke: #43584b;
+  stroke-width: 1;
+}
+.goal-label {
+  font: 700 18px "DM Mono";
+  fill: #fff;
+  letter-spacing: 0.2em;
+}
+.pitch-footer {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 2px 20px 16px;
+  color: #dce8df;
+  font: 500 10px "DM Mono";
+}
+.pitch-footer span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pitch-footer small {
+  color: #829891;
+  font: 9px "DM Sans";
+  margin-left: 3px;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4794e4;
+}
+.dot.pale {
+  background: #155aa7;
+}
+.pitch-footer .direction {
+  margin-left: auto;
+  color: #9bb5a5;
+  letter-spacing: 0.12em;
+}
+.direction b {
+  font-size: 16px;
+  color: #e7f3e9;
+}
+.lower-grid {
+  display: grid;
+  grid-template-columns: 1.12fr 1fr;
+  gap: 14px;
+  margin-top: 15px;
+}
+.activity-card,
+.players-card {
+  border: 1px solid #2e403d;
+  border-radius: 9px;
+  background: #141f1e;
+  padding: 17px 18px;
+}
+.section-heading h2 {
+  font: 600 16px "Space Grotesk";
+  margin-top: 4px;
+}
+.feed-count {
+  font-size: 9px;
+}
+.event-list {
+  margin-top: 13px;
+  max-height: 225px;
+  overflow: auto;
+}
+.event-row {
+  display: grid;
+  grid-template-columns: 38px 82px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-top: 1px solid #293936;
+  font-size: 11px;
+}
+.event-minute {
+  font: 500 10px "DM Mono";
+  color: #879e95;
+}
+.event-tag {
+  font: 500 8px "DM Mono";
+  letter-spacing: 0.08em;
+  color: #92b0a0;
+}
+.event-tag.shot {
+  color: #f1ca71;
+}
+.event-tag.pass {
+  color: #85b9ee;
+}
+.event-text {
+  color: #d0dbd4;
+}
+.empty-feed {
+  padding: 21px 0;
+  color: #849b91;
+  font-size: 11px;
+}
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 0;
+  border-bottom: 1px solid #293936;
+}
+.player-row:last-child {
+  border: 0;
+}
+.number {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #3585da;
+  color: white;
+  font: 700 12px "Space Grotesk";
+  border: 1px solid #d5eaff;
+}
+.number-4 {
+  background: #1c67b7;
+}
+.identity {
+  min-width: 142px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.identity b {
+  font: 600 12px "Space Grotesk";
+}
+.identity small {
+  font-size: 9px;
+  color: #82968f;
+}
+.attribute-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-left: auto;
+}
+.attribute-grid span {
+  display: grid;
+  text-align: center;
+  gap: 3px;
+  color: #dce8df;
+  font: 500 10px "DM Mono";
+}
+.attribute-grid b {
+  font: 500 8px "DM Mono";
+  color: #81968d;
+}
+footer {
+  text-align: center;
+  margin-top: 22px;
+  color: #667c74;
+  font: 9px "DM Mono";
+  letter-spacing: 0.12em;
+}
+footer span {
+  padding: 0 7px;
+  color: #6bc594;
+}
+.fulltime {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #091511bb;
+  backdrop-filter: blur(3px);
+}
+.fulltime > div {
+  text-align: center;
+  padding: 26px 40px;
+  background: #182725;
+  border: 1px solid #49615a;
+  border-radius: 10px;
+}
+.fulltime h2 {
+  font: 600 23px "Space Grotesk";
+  margin: 8px 0 16px;
+}
+.fulltime button {
+  background: #3485d1;
+  border: 0;
+  border-radius: 5px;
+  color: white;
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .topbar {
+    padding: 0 14px;
+  }
+  .mode-label {
+    display: none;
+  }
+  .content {
+    padding: 22px 12px;
+  }
+  .heading h1 {
+    font-size: 23px;
+  }
+  .heading p {
+    max-width: 260px;
+    line-height: 1.5;
+  }
+  .scoreboard {
+    height: 68px;
+    padding: 0 12px;
+    grid-template-columns: 1fr 92px 1fr;
+  }
+  .team-name {
+    font-size: 9px;
+  }
+  .team-name span {
+    display: none;
+  }
+  .match-clock strong {
+    font-size: 19px;
+  }
+  .possession {
+    font-size: 7px;
+  }
+  .pitch-wrap {
+    padding: 8px 7px;
+  }
+  .pitch-footer {
+    padding: 2px 7px 12px;
+    gap: 12px;
+    font-size: 8px;
+  }
+  .pitch-footer small {
+    display: none;
+  }
+  .lower-grid {
+    grid-template-columns: 1fr;
+  }
+  .activity-card,
+  .players-card {
+    padding: 14px;
+  }
+  .player-row {
+    gap: 7px;
+  }
+  .identity {
+    min-width: 118px;
+  }
+  .attribute-grid {
+    gap: 3px;
+  }
+  .attribute-grid span {
+    font-size: 8px;
+  }
+  .attribute-grid b {
+    font-size: 7px;
+  }
+}
+.match-activities{margin:16px 0 0;padding:16px 18px;border:1px solid #29443a;border-radius:8px;background:#101d18}.match-activities header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.match-activities h2{margin:5px 0 12px;font:600 17px 'Space Grotesk'}.match-activities ol{display:grid;gap:0;margin:0;padding:0;list-style:none}.match-activities li{display:grid;grid-template-columns:48px 112px minmax(0,1fr);gap:10px;align-items:start;padding:9px 2px;border-top:1px solid #293b32;font-size:12px}.match-activities time{color:#9bb9a6;font:600 11px 'DM Mono'}.match-activities li>b{color:#d8e7dc;font:600 9px 'DM Mono';letter-spacing:.05em}.match-activities li span{color:#b8c9bf}.match-activities .activity-goal>b,.match-activities .activity-own_goal>b{color:#9ce5ad}.match-activities .activity-yellow_card>b{color:#f2d766}.match-activities .activity-red_card>b{color:#f3847c}.match-activities .activity-substitution>b{color:#90c9ef}.match-activities>p{margin:0;color:#849b8d;font-size:11px}
