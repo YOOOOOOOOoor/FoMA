@@ -172,7 +172,7 @@ export function MatchSimulator({ career = null, fixture = null, onComplete = nul
   }
   const matchRef = useRef(null)
   if (!matchRef.current) { const setup = buildSetup(); matchRef.current = createMatch(setup?.seed ?? career?.seed, setup) }
-  const accumulator = useRef(0), speedRef = useRef(1), simulatingRef = useRef(false)
+  const accumulator = useRef(0), speedRef = useRef(1), simulatingRef = useRef(false), lastRender = useRef(0)
   const [view, setView] = useState(() => snapshotMatch(matchRef.current))
   const [screen, setScreen] = useState(career ? 'match' : 'intro'), [running, setRunning] = useState(Boolean(career))
   const [speed, setSpeed] = useState(1)
@@ -186,8 +186,9 @@ export function MatchSimulator({ career = null, fixture = null, onComplete = nul
       const elapsed = Math.min(.1, (now - previous) / 1000); previous = now
       if (screen === 'match' && running && matchRef.current.phase === 'playing') {
         accumulator.current += elapsed * speedRef.current
-        while (accumulator.current >= FIXED_TIMESTEP) { advanceMatch(matchRef.current, FIXED_TIMESTEP); accumulator.current -= FIXED_TIMESTEP }
-        setView(snapshotMatch(matchRef.current))
+        let steps = 0
+        while (accumulator.current >= FIXED_TIMESTEP && steps < 8) { advanceMatch(matchRef.current, FIXED_TIMESTEP); accumulator.current -= FIXED_TIMESTEP; steps++ }
+        if (now - lastRender.current >= 1000 / 30) { lastRender.current = now; setView(snapshotMatch(matchRef.current)) }
       }
       frame = requestAnimationFrame(loop)
     }
@@ -206,13 +207,23 @@ export function MatchSimulator({ career = null, fixture = null, onComplete = nul
     else restartMatch(matchRef.current)
     accumulator.current = 0; setFulltimeDismissed(false); setView(snapshotMatch(matchRef.current)); setStatsOpen(false); setScreen('match'); setRunning(true)
   }
-  const runToEnd = () => {
+  const runToEnd = async () => {
     if (simulatingRef.current || matchRef.current.phase === 'fulltime') return
     simulatingRef.current = true
     setRunning(false)
     accumulator.current = 0
-    try { simulateToEnd(matchRef.current); setFulltimeDismissed(false); setView(snapshotMatch(matchRef.current)) }
-    finally { simulatingRef.current = false }
+    setView({ ...snapshotMatch(matchRef.current), simulationProgress: 0 })
+    try {
+      let steps = 0
+      while (matchRef.current.phase !== 'fulltime') {
+        if (matchRef.current.phase === 'halftime') resumeSecondHalf(matchRef.current)
+        for (let batch = 0; batch < 240 && matchRef.current.phase !== 'fulltime'; batch++) advanceMatch(matchRef.current, FIXED_TIMESTEP)
+        steps += 240
+        setView({ ...snapshotMatch(matchRef.current), simulationProgress: Math.min(99, Math.round(matchRef.current.elapsed / 480 * 100)) })
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+      setFulltimeDismissed(false); setView(snapshotMatch(matchRef.current))
+    } finally { simulatingRef.current = false }
   }
   const chooseTeam = team => { matchRef.current.managedTeam = team; setView(snapshotMatch(matchRef.current)); setScreen('lineup') }
   const changeTactic = (key, value) => { const match = matchRef.current; match.teamTactics[match.managedTeam][key] = value; onTacticChange?.(key, value); setView(snapshotMatch(match)) }
@@ -262,6 +273,7 @@ export function MatchSimulator({ career = null, fixture = null, onComplete = nul
             {career && fixture && <button className="hud-button squad-match-button" onClick={openLiveSquad}>SQUAD</button>}
           </div>
         </div>
+        {simulatingRef.current && <div className="simulation-progress" role="status"><b>SIMULATING MATCH</b><span>{view.minute}' · {view.simulationProgress ?? 0}%</span><progress max="100" value={view.simulationProgress ?? 0}/></div>}
         <div className="pitch-wrap"><Pitch match={view}/></div>
         <MatchActivities events={view.events}/>
         {view.phase === 'halftime' && <MatchSummary match={view} halftime homeName={homeName} awayName={awayName} homeScore={homeScore} awayScore={awayScore} onSquad={career&&fixture?openLiveSquad:null} onContinue={() => { resumeSecondHalf(matchRef.current); setView(snapshotMatch(matchRef.current)); setRunning(true) }}/>}

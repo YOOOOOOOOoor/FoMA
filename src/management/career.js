@@ -498,9 +498,9 @@ function processContractDates(career) {
   }
 }
 
-function simulateFixturesForDate(career, random) {
+function simulateFixturesForDate(career, random, simulateManagedFixture = false) {
   const userFixture = currentManagedMatch(career)
-  const fixtures = career.fixtures.filter(fixture => fixture.status === 'scheduled' && fixture.scheduledDate === career.careerDate && fixture.id !== userFixture?.id)
+  const fixtures = career.fixtures.filter(fixture => fixture.status === 'scheduled' && fixture.scheduledDate === career.careerDate && (simulateManagedFixture || fixture.id !== userFixture?.id))
   const appeared = new Set()
   for (const fixture of fixtures) {
     const home = career.teams.find(team => team.id === fixture.homeTeamId)
@@ -772,9 +772,9 @@ export function respondToLoanOffer(career,offerId,action,terms=null){
   addInboxEvent(career,{id:`${offer.id}-decision`,type:'LOAN NEGOTIATION RESPONSE',playerId:player.id,loanOfferId:offer.id,text:offer.response});return {ok:true,status:offer.status}
 }
 
-export function advanceCareerDay(career) {
+export function advanceCareerDay(career, { simulateManagedFixture = false } = {}) {
   if (!career?.careerDate) return { ok: false, message: 'This career has no active calendar date.' }
-  if (currentManagedMatch(career)) return { ok: false, reason: 'MATCHDAY', message: 'Your club has a match today. Play it before advancing.' }
+  if (!simulateManagedFixture && currentManagedMatch(career)) return { ok: false, reason: 'MATCHDAY', message: 'Your club has a match today. Play it before advancing.' }
   career.careerDate = addCareerDays(career.careerDate, 1)
   const responseEvents = []
   const inboxBefore = career.inbox.length
@@ -788,7 +788,7 @@ export function advanceCareerDay(career) {
   processAcceptedReleaseClauseTransfers(career)
   returnExpiredLoans(career)
   const dailyRandom = rng((career.seed + Number(career.careerDate.replaceAll('-', '')) * 92821) >>> 0)
-  const { fixtures, userFixture } = simulateFixturesForDate(career, dailyRandom)
+  const { fixtures, userFixture } = simulateFixturesForDate(career, dailyRandom, simulateManagedFixture)
   const scheduledEvents = []
   for (const event of career.scheduledEvents ?? []) {
     if (event.processed || event.date > career.careerDate) continue
@@ -806,6 +806,20 @@ export function advanceCareerDay(career) {
     incomingOfferArrived)
   const reason = userFixture ? 'MATCHDAY' : responseEvents.length ? 'TRANSFER_RESPONSE' : scheduledEvents.some(event => event.important) ? 'CAREER_EVENT' : newInbox.some(event => ['CONTRACT WARNING', 'CONTRACT EXPIRED'].includes(event.type)) || incomingOfferArrived ? 'CAREER_EVENT' : null
   return { ok: true, date: career.careerDate, fixturesSimulated: fixtures.length, userFixture, responseEvents, scheduledEvents, important, reason }
+}
+
+// Uses the same calendar day processing and quick-match rules as normal career advancement.
+export async function simulateCareerToSeasonEnd(career, onProgress = () => {}) {
+  if (!career?.fixtures?.length) return { ok: false, message: 'This career has no fixtures to simulate.' }
+  let daysAdvanced = 0
+  while (!career.fixtures.every(fixture => fixture.status === 'played')) {
+    const result = advanceCareerDay(career, { simulateManagedFixture: true })
+    if (!result.ok) return { ...result, daysAdvanced }
+    daysAdvanced++
+    onProgress({ date: career.careerDate, daysAdvanced, played: career.fixtures.filter(fixture => fixture.status === 'played').length, total: career.fixtures.length })
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  return { ok: true, date: career.careerDate, daysAdvanced, played: career.fixtures.length, total: career.fixtures.length }
 }
 
 export function simulateToNextEvent(career, maxDays = 400) {

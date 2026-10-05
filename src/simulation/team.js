@@ -28,6 +28,8 @@ export function attributesForPosition(player, targetPosition) {
 export const FORMATION_SHAPES = Object.freeze({
   '4-4-2': Object.freeze({ defs: 4, mids: 4, atts: 2 }),
   '4-3-3': Object.freeze({ defs: 4, mids: 3, atts: 3 }),
+  '4-3-3 (2)': Object.freeze({ defs: 4, mids: 3, atts: 3 }),
+  '4-3-3 (3)': Object.freeze({ defs: 4, mids: 3, atts: 3 }),
   '4-2-3-1': Object.freeze({ defs: 4, mids: 5, atts: 1 }),
   '3-5-2': Object.freeze({ defs: 3, mids: 5, atts: 2 }),
   '5-3-2': Object.freeze({ defs: 5, mids: 3, atts: 2 }),
@@ -36,6 +38,8 @@ export const FORMATION_SHAPES = Object.freeze({
 const FORMATION_ROLES = Object.freeze({
   '4-4-2': { defense: ['LB', 'LCB', 'RCB', 'RB'], midfield: ['LM', 'LCM', 'RCM', 'RM'], attack: ['ST', 'ST'] },
   '4-3-3': { defense: ['LB', 'LCB', 'RCB', 'RB'], midfield: ['LCM', 'CM', 'RCM'], attack: ['LW', 'ST', 'RW'] },
+  '4-3-3 (2)': { defense: ['LB', 'LCB', 'RCB', 'RB'], midfield: ['LDM', 'CM', 'CAM'], attack: ['LW', 'ST', 'RW'] },
+  '4-3-3 (3)': { defense: ['LB', 'LCB', 'RCB', 'RB'], midfield: ['DM', 'LCM', 'RCM'], attack: ['LW', 'ST', 'RW'] },
   '4-2-3-1': { defense: ['LB', 'LCB', 'RCB', 'RB'], midfield: ['LDM', 'RDM', 'LAM', 'CAM', 'RAM'], attack: ['ST'] },
   '3-5-2': { defense: ['LCB', 'CB', 'RCB'], midfield: ['LWB', 'LCM', 'CM', 'RCM', 'RWB'], attack: ['ST', 'ST'] },
   '5-3-2': { defense: ['LWB', 'LCB', 'CB', 'RCB', 'RWB'], midfield: ['LCM', 'CM', 'RCM'], attack: ['ST', 'ST'] },
