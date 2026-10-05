@@ -186,8 +186,9 @@ export function MatchSimulator({ career = null, fixture = null, onComplete = nul
       const elapsed = Math.min(.1, (now - previous) / 1000); previous = now
       if (screen === 'match' && running && matchRef.current.phase === 'playing') {
         accumulator.current += elapsed * speedRef.current
+        accumulator.current = Math.min(accumulator.current, FIXED_TIMESTEP * 12)
         let steps = 0
-        while (accumulator.current >= FIXED_TIMESTEP && steps < 8) { advanceMatch(matchRef.current, FIXED_TIMESTEP); accumulator.current -= FIXED_TIMESTEP; steps++ }
+        while (accumulator.current >= FIXED_TIMESTEP && steps < 10) { advanceMatch(matchRef.current, FIXED_TIMESTEP); accumulator.current -= FIXED_TIMESTEP; steps++ }
         if (now - lastRender.current >= 1000 / 30) { lastRender.current = now; setView(snapshotMatch(matchRef.current)) }
       }
       frame = requestAnimationFrame(loop)

@@ -1248,7 +1248,7 @@ export function beginClubNegotiation(career, playerId, buyerTeamId) {
   migrateCareer(career)
   const player=career.players[playerId], seller=career.teams.find(team=>team.id===player?.teamId), buyer=career.teams.find(team=>team.id===buyerTeamId)
   if(!player||!seller||!buyer||seller.id===buyer.id)return {ok:false,message:'This player is not available to negotiate with.'}
-  if(!player.transferListed)return beginPlayerNegotiation(career,playerId,buyerTeamId,player.releaseClause,'RELEASE_CLAUSE')
+  if(!player.transferListed){if(!(player.releaseClause>0))return {ok:false,message:'This player is not listed and has no release clause. Approach the club through a transfer offer first.'};return beginPlayerNegotiation(career,playerId,buyerTeamId,player.releaseClause,'RELEASE_CLAUSE')}
   if(buyer.roster.length>=25)return {ok:false,message:'Your squad is at its 25-player limit.'}
   const askingRange=negotiationAskingRange(player,seller,buyer,career)
   career.activeNegotiation={playerId,sellerTeamId:seller.id,buyerTeamId:buyer.id,source:'CLUB',stage:'CLUB',askingRange,clubAttemptsRemaining:3,clubOffers:[],clubFeeling:null,agreedFee:null,playerAttemptsRemaining:3,playerOffers:[],playerFeeling:null,agreedContract:null,result:null}

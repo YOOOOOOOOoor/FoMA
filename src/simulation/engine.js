@@ -505,6 +505,7 @@ export function substitutePlayer(match, team, outgoingId, incomingId) {
   const activePlayers = team === 'home' ? match.players : match.opponents;
   const outgoingVelocity = { x: outgoing.vx ?? 0, y: outgoing.vy ?? 0 };
   outgoing.substitutedOff = true;
+  invalidateActorCache(match);
   outgoing.state = 'SUBBED_OFF'; outgoing.intent = 'SUBBED_OFF'; outgoing.vx = 0; outgoing.vy = 0;
   Object.assign(incoming, {
     team, clubId: outgoing.clubId, clubName: outgoing.clubName,
@@ -576,20 +577,23 @@ function opponentPlayers(match, team) { return playersForTeam(match, opponentTea
 function attackGoal(match, team) { return { x: teamContext(match, team).goalX, y: 0.5 }; }
 function teamName(match, team) { return teamLabel(match, team); }
 
-function allActors(match) {
-  return [
-    ...match.players,
-    ...match.opponents,
-    ...Object.values(match.goalkeepers ?? {}),
-  ].filter(player => !player.sentOff && !player.substitutedOff).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+const actorCache = new WeakMap();
+function actorsForMatch(match) {
+  const version = match.actorRosterVersion ?? 0;
+  let cached = actorCache.get(match);
+  if (!cached || cached.version !== version) {
+    const ordered = [...match.players, ...match.opponents, ...Object.values(match.goalkeepers ?? {})]
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const active = ordered.filter(player => !player.sentOff && !player.substitutedOff);
+    cached = { version, active, byId: new Map(active.map(player => [player.id, player])) };
+    actorCache.set(match, cached);
+  }
+  return cached;
 }
+function allActors(match) { return actorsForMatch(match).active; }
+function invalidateActorCache(match) { match.actorRosterVersion = (match.actorRosterVersion ?? 0) + 1; }
 
-function getPlayer(match, id) {
-  return (
-    allActors(match).find((player) => player.id === id) ??
-    null
-  );
-}
+function getPlayer(match, id) { return actorsForMatch(match).byId.get(id) ?? null; }
 
 function syncPossession(match) {
   const owner = getPlayer(match, match.ball.ownerId);
@@ -1284,13 +1288,13 @@ function attemptChallenge(match, defender, plan) {
     const severe = random(match) < clamp(0.012 + mistiming * 0.12, 0.008, 0.045)
     const caution = severe || random(match) < clamp(0.08 + mistiming * 0.42 + ((defender.yellowCards ?? 0) ? 0.2 : 0), 0.06, 0.42)
     if (severe) {
-      defender.sentOff = true; defender.card = 'RED'; defender.state = 'SENT_OFF'; defender.intent = 'SENT_OFF'
+      defender.sentOff = true; invalidateActorCache(match); defender.card = 'RED'; defender.state = 'SENT_OFF'; defender.intent = 'SENT_OFF'
       addStat(match, defender, 'redCards'); match.teamRedCards ??= { home: 0, away: 0 }; match.teamRedCards[defender.team]++
       log(match, 'red_card', `${defender.name} (${teamName(match, defender.team)}) is sent off for a dangerous challenge.`)
     } else if (caution) {
       defender.yellowCards = (defender.yellowCards ?? 0) + 1; addStat(match, defender, 'yellowCards')
       if (defender.yellowCards >= 2) {
-        defender.sentOff = true; defender.card = 'SECOND_YELLOW'; defender.state = 'SENT_OFF'; defender.intent = 'SENT_OFF'
+        defender.sentOff = true; invalidateActorCache(match); defender.card = 'SECOND_YELLOW'; defender.state = 'SENT_OFF'; defender.intent = 'SENT_OFF'
         addStat(match, defender, 'redCards'); match.teamRedCards ??= { home: 0, away: 0 }; match.teamRedCards[defender.team]++
         log(match, 'red_card', `${defender.name} (${teamName(match, defender.team)}) is sent off after a second yellow card.`)
       } else { defender.card = 'YELLOW'; log(match, 'yellow_card', `${defender.name} (${teamName(match, defender.team)}) is booked for the foul.`) }
@@ -1939,6 +1943,7 @@ function validateSimulationState(match) {
     match.invalidStateCount = (match.invalidStateCount ?? 0) + 1;
     log(match, "simulation_recovery", "Recovered an invalid ball position or velocity.");
   }
+  match.lastValidationAt = match.elapsed;
 }
 
 function reevaluateUnproductivePossession(match, dt) {
@@ -1986,7 +1991,7 @@ export function advanceMatch(match, dt) {
     const line = match.statistics?.players?.[player.id]
     if (line?.appearances) line.minutes += step * 90 / MATCH_LENGTH
   }
-  validateSimulationState(match);
+  if (match.elapsed - (match.lastValidationAt ?? -1) >= 0.1) validateSimulationState(match);
   match.minute = Math.min(90, Math.floor((match.elapsed / MATCH_LENGTH) * 90));
   if (match.restartTimer > 0) {
     match.restartTimer -= step;
@@ -2044,7 +2049,7 @@ function makeHalftimeSubstitutions(match) {
       const bench = benchPool.filter(player => player.position === tired.position).sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || b.fitness - a.fitness)[0]
         ?? benchPool.filter(player => groupOf(player) === groupOf(tired)).sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || b.fitness - a.fitness)[0];
       if (!bench) break;
-      tired.substitutedOff = true; tired.state = 'SUBBED_OFF'; tired.intent = 'SUBBED_OFF'; tired.vx = 0; tired.vy = 0;
+      tired.substitutedOff = true; invalidateActorCache(match); tired.state = 'SUBBED_OFF'; tired.intent = 'SUBBED_OFF'; tired.vx = 0; tired.vy = 0;
       Object.assign(bench, { role: tired.role, tacticalRole: tired.tacticalRole, tacticalZone: tired.tacticalZone, profile: tired.profile, formationSlot: { ...tired.formationSlot }, laneSide: tired.laneSide, x: tired.x, y: tired.y, target: { ...tired.target }, state: tired.role.startsWith('DEFENDER') ? 'DEFEND_SHAPE' : 'SUPPORT', intent: tired.role.startsWith('DEFENDER') ? 'DEFEND_SHAPE' : 'SUPPORT', timeInState: 0, commitment: 0, substitutedOff: false, sentOff: false, vx: 0, vy: 0 });
       active.push(bench);
       match.substitutes[team] = match.substitutes[team].filter(player => player.id !== bench.id);
@@ -2160,6 +2165,7 @@ export function restartMatch(match, seed = (match.seed + 1) >>> 0) {
   const teamTactics = match.teamTactics ?? createTeamTactics();
   const previousFitness = Object.fromEntries(allActors(match).map(player => [player.id, player.fitness ?? 100]));
   Object.assign(match, createMatch(seed));
+  invalidateActorCache(match);
   match.managedTeam = managedTeam;
   match.teamTactics = teamTactics;
   for (const player of allActors(match)) {

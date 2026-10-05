@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createCareer, beginLoanNegotiation, extendPlayerContract, setPlayerAskingPrice, setPlayerLoanListed, setPlayerTransferListed, shortlistPlayer, removeFromShortlist, respondToLoanOption, saveCareer, loadCareer } from '../src/management/career.js'
+import { createCareer, beginLoanNegotiation, beginClubNegotiation, extendPlayerContract, setPlayerAskingPrice, setPlayerLoanListed, setPlayerTransferListed, shortlistPlayer, removeFromShortlist, respondToLoanOption, saveCareer, loadCareer, simulateCareerToSeasonEnd } from '../src/management/career.js'
+import { tacticalRoleForSlot } from '../src/simulation/team.js'
 
 function setup(){
   const career=createCareer(914,'premier-league')
@@ -81,4 +82,48 @@ test('listing, shortlist, pending offers, and loan terms survive save and load',
     assert.equal(copy.transferListed,true);assert.equal(copy.askingPrice,player.askingPrice);assert.equal(copy.loanListed,true);assert.equal(copy.loanListing.wageContribution,82)
     assert.ok(loaded.shortlist.some(item=>item.playerId===player.id));assert.equal(loaded.transferOffers[0].id,'save-transfer');assert.equal(loaded.loanOffers[0].id,'save-loan')
   }finally{if(prior===undefined)delete globalThis.localStorage;else globalThis.localStorage=prior}
+})
+
+test('shortlist removal leaves transfer and loan listing state unchanged',()=>{
+  const {career,other,player}=setup()
+  player.teamId=other.id
+  assert.equal(setPlayerTransferListed(career,player.id,true).ok,true)
+  assert.equal(setPlayerLoanListed(career,player.id,true,{duration:1}).ok,true)
+  shortlistPlayer(career,player.id)
+  removeFromShortlist(career,player.id)
+  assert.equal(player.transferListed,true)
+  assert.equal(player.loanListed,true)
+})
+
+test('unlisted shortlisted player uses the existing release-clause negotiation path',()=>{
+  const {career,other,player}=setup()
+  player.teamId=other.id;player.transferListed=false
+  career.teams.find(team=>team.id===career.managedTeamId).transferBudget=1_000_000_000
+  const result=beginClubNegotiation(career,player.id,career.managedTeamId)
+  assert.equal(result.ok,true)
+  assert.equal(career.activeNegotiation.source,'RELEASE_CLAUSE')
+  assert.equal(career.activeNegotiation.agreedFee,player.releaseClause)
+})
+
+test('full career simulation completes eligible fixtures once with coherent results',async()=>{
+  const career=createCareer(218,'premier-league')
+  career.managedTeamId=career.teams[0].id
+  career.careerDate=career.fixtures[0].scheduledDate
+  const fixtureIds=new Set(career.fixtures.map(fixture=>fixture.id))
+  assert.equal(fixtureIds.size,career.fixtures.length)
+  const result=await simulateCareerToSeasonEnd(career)
+  assert.equal(result.ok,true)
+  assert.equal(career.fixtures.every(fixture=>fixture.status==='played'),true)
+  assert.equal(new Set(career.completedMatches.map(match=>match.fixtureId)).size,career.fixtures.length)
+  for(const fixture of career.fixtures){
+    assert.ok(fixture.result.homeGoals>=0&&fixture.result.awayGoals>=0)
+    const stats=fixture.result.statistics?.teams
+    if(stats){for(const side of ['home','away'])assert.ok(stats[side].goals<=stats[side].shotsOnTarget&&stats[side].shotsOnTarget<=stats[side].shots)}
+  }
+})
+
+test('4-3-3 variants assign meaningfully different tactical positions',()=>{
+  assert.deepEqual([0,1,2].map(index=>tacticalRoleForSlot('4-3-3','midfield',index)),['LCM','CM','RCM'])
+  assert.deepEqual([0,1,2].map(index=>tacticalRoleForSlot('4-3-3 (2)','midfield',index)),['LDM','CM','CAM'])
+  assert.deepEqual([0,1,2].map(index=>tacticalRoleForSlot('4-3-3 (3)','midfield',index)),['DM','LCM','RCM'])
 })
