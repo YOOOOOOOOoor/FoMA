@@ -2424,9 +2424,8 @@
 .mg-main,.mg-panel,.mg-layout,.mg-lineup-editor { min-width:0; }
 .mg-modal { box-sizing:border-box; }
 @media (max-width:700px) {
-  .mg-main { padding:16px 12px 36px; }
-  .mg-panel { padding:16px 12px; }
-  .mg-page-title h1,.mg-page-title h2 { font-size:clamp(21px,6vw,28px); overflow-wrap:anywhere; }
+  .mg-main.page-squad > .mg-panel,.mg-main.page-transfers > .mg-panel { padding:16px 12px; }
+  .mg-main.page-squad .mg-page-title h1,.mg-main.page-squad .mg-page-title h2,.mg-main.page-transfers .mg-page-title h1,.mg-main.page-transfers .mg-page-title h2 { font-size:clamp(21px,6vw,28px); overflow-wrap:anywhere; }
   .mg-formation-pitch { max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
   .mg-formation-pitch > .mg-formation-row { min-width:470px; }
   .mg-formation-selector > div { overflow-x:auto; flex-wrap:nowrap; padding-bottom:6px; }
@@ -2446,8 +2445,5 @@
   .mg-contract-actions button { width:100%; }
 }
 @media (max-width:360px) {
-  .mg-main { padding-inline:8px; }
-  .mg-panel { padding-inline:9px; }
-  .mg-calendar-actions { display:grid; grid-template-columns:1fr; width:100%; }
-  .mg-calendar-actions button { width:100%; min-height:42px; }
+  .mg-main.page-squad > .mg-panel,.mg-main.page-transfers > .mg-panel { padding-inline:9px; }
 }

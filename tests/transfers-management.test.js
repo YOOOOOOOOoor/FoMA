@@ -74,6 +74,8 @@ test('listing, shortlist, pending offers, and loan terms survive save and load',
   const prior=globalThis.localStorage,storage=new Map()
   globalThis.localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}
   try{
+    const managed=career.teams.find(team=>team.id===career.managedTeamId)
+    managed.formation='4-3-3 (2)';managed.lineup.atts.push(managed.lineup.mids.pop())
     setPlayerAskingPrice(career,player.id,Math.round(player.marketValue*.9));setPlayerTransferListed(career,player.id,true)
     setPlayerLoanListed(career,player.id,true,{loanFee:125000,wageContribution:82,duration:1,optionToBuy:player.marketValue})
     shortlistPlayer(career,player.id);career.transferOffers=[{id:'save-transfer',playerId:player.id,status:'PENDING'}];career.loanOffers=[{id:'save-loan',playerId:player.id,status:'PENDING'}]
@@ -81,6 +83,7 @@ test('listing, shortlist, pending offers, and loan terms survive save and load',
     const loaded=loadCareer(1).career,copy=loaded.players[player.id]
     assert.equal(copy.transferListed,true);assert.equal(copy.askingPrice,player.askingPrice);assert.equal(copy.loanListed,true);assert.equal(copy.loanListing.wageContribution,82)
     assert.ok(loaded.shortlist.some(item=>item.playerId===player.id));assert.equal(loaded.transferOffers[0].id,'save-transfer');assert.equal(loaded.loanOffers[0].id,'save-loan')
+    assert.equal(loaded.teams.find(team=>team.id===loaded.managedTeamId).formation,'4-3-3 (2)')
   }finally{if(prior===undefined)delete globalThis.localStorage;else globalThis.localStorage=prior}
 })
 
