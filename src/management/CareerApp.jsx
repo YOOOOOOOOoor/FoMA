@@ -342,6 +342,7 @@ function CareerCalendar({ career, managed, onAdvanceDay, onSimulateNext, onPlayM
 export default function CareerApp() {
   const loaded=useMemo(()=>loadCareer(),[])
   const [career,setCareer]=useState(loaded.career), [screen,setScreen]=useState(loaded.career?'home':'home')
+  const [careerSimulation,setCareerSimulation]=useState(null), [careerSimulating,setCareerSimulating]=useState(false)
   const [page,setPage]=useState('HOME'),[error,setError]=useState(loaded.error),[message,setMessage]=useState(''),[player,setPlayer]=useState(null),[playerReadOnly,setPlayerReadOnly]=useState(false),[fixtureId,setFixtureId]=useState(null)
   const [clubsLeagueFilter,setClubsLeagueFilter]=useState(''),[selectedClubId,setSelectedClubId]=useState(null)
   const [transferPosition,setTransferPosition]=useState('ALL'),[minOvr,setMinOvr]=useState(0),[maxAge,setMaxAge]=useState(40),[transferSearch,setTransferSearch]=useState(''),[clubLeague,setClubLeague]=useState(LEAGUES[0].id)
@@ -360,6 +361,15 @@ export default function CareerApp() {
   const startMatch=f=>{if(!f||f.status!=='scheduled'||f.scheduledDate!==career.careerDate)return;updateCareer(c=>{c.currentMatchFixtureId=f.id});setFixtureId(f.id);setScreen('match')}
   const advanceOneDay=()=>{const result=runCareerAction(advanceCareerDay);if(result?.ok)setMessage(result.userFixture?`Matchday: ${formatCareerDate(result.date)}. Your match is ready when you are.`:`Advanced to ${formatCareerDate(result.date)}.`);else setMessage(result?.message??'Unable to advance the career date.')}
   const simulateNextEvent=()=>{const result=runCareerAction(simulateToNextEvent);if(result?.ok)setMessage(result.daysAdvanced?`Advanced ${result.daysAdvanced} day(s) to ${formatCareerDate(result.date)}${result.reason==='MATCHDAY'?'. Your match is ready when you are.':'.'}`:`${formatCareerDate(result.date)} is already matchday. Play the match before advancing.`);else setMessage(result?.message??'Unable to simulate to the next event.')}
+  const simulateSeason=async()=>{
+    if(careerSimulating||!career)return
+    setCareerSimulating(true);setCareerSimulation({played:0,total:career.fixtures.length,date:career.careerDate})
+    const next=structuredClone(career)
+    try {
+      const result=await simulateCareerToSeasonEnd(next,progress=>setCareerSimulation({...progress}))
+      if(result.ok){next.teams.forEach(syncBench);saveCareer(next,next.saveSlot??selectedSlot);setCareer(next);setMessage(`Season simulated: ${result.played} fixtures completed.`)}else setMessage(result.message??'Unable to simulate the season.')
+    } finally {setCareerSimulating(false);setCareerSimulation(null)}
+  }
   const finishMatch=match=>{updateCareer(c=>applyManagedMatch(c,fixtureId,match));setFixtureId(null);setMatchSquadOpen(false);setScreen('dashboard');setPage('HOME')}
   const assignLineup=(target,id,source=null)=>updateCareer(c=>{
     const t=c.teams.find(team=>team.id===c.managedTeamId), incoming=c.players[id]
