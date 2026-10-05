@@ -9,7 +9,7 @@ export { CLUBS, LEAGUES } from './clubCatalog.js'
 export const SAVE_KEY = 'football_manager_save_v1'
 export const SAVE_SLOTS_KEY = 'foma_career_save_slots_v1'
 export const SAVE_SLOT_COUNT = 4
-export const SAVE_VERSION = 10
+export const SAVE_VERSION = 11
 export const FORMATIONS = FORMATION_SHAPES
 export const INITIAL_CAREER_DATE = '2025-08-01'
 export const TRANSFER_WINDOWS = Object.freeze([{name:'Summer',startMonth:7,startDay:1,endMonth:8,endDay:31},{name:'Winter',startMonth:1,startDay:1,endMonth:1,endDay:31}])
@@ -87,18 +87,35 @@ const stableUnit = value => {
   return (hash >>> 0) / 4294967296
 }
 const boardPriority = value => ['HIGH','MEDIUM','LOW'].includes(value) ? value : 'MEDIUM'
-const startingBalance = team => Math.max(12000000,22000000+(team.strength??70)*250000+({Possession:8000000,'High press':1000000,'Defensive / counter':-7000000,Direct:0,Variable:250000,Balanced:0}[team.identity]??0))
-const startingTransferBudget = team => Math.max(4500000,6500000+((team.strength??74)-74)*350000+({Possession:1200000,'High press':300000,'Defensive / counter':-700000,Direct:400000,Variable:150000,Balanced:0}[team.identity]??0))
+const startingBalance = team => Math.max(8000000, (team.strength??70)**3 * 230 + ({Possession:8000000,'High press':1000000,'Defensive / counter':-7000000,Direct:0,Variable:250000,Balanced:0}[team.identity]??0))
+const startingTransferBudget = team => Math.max(1500000, Math.round(startingBalance(team)*clamp(.16+((team.strength??70)-70)*.006,.12,.34)/500000)*500000)
+const ensureFinance = team => {
+  team.finances ??= {balance:startingBalance(team),seasonIncome:0,seasonExpenses:0,seasonProfit:0,previousSeasonProfit:0}
+  team.finances.transactions ??=[]
+  team.finances.categories ??={income:{matchday:0,sponsorship:0,broadcasting:0,prizeMoney:0,transfers:0,commercial:0},expenses:{transfers:0,wages:0,other:0}}
+  return team.finances
+}
+function careerSeasonEndDate(value){const year=Number(value.slice(0,4)),june=`${year}-06-30`;return value<=june?june:`${year+1}-06-30`}
+function recordFinance(career, team, direction, category, amount, description) {
+  amount=Math.max(0,Math.round(amount||0)); if(!team||!amount)return
+  const f=ensureFinance(team), bucket=direction==='income'?'income':'expenses'
+  f.balance += direction==='income'?amount:-amount
+  if(direction==='income')f.seasonIncome+=amount;else f.seasonExpenses+=amount
+  f.categories[bucket][category]=(f.categories[bucket][category]??0)+amount
+  f.transactions.unshift({id:`fin-${career.season}-${career.careerDate}-${team.id}-${f.transactions.length+1}`,season:career.season,date:career.careerDate,direction,category,amount,description})
+  if(f.transactions.length>500)f.transactions.length=500
+}
 
 function createBoard(team) {
   const domestic = team.strength >= 76 ? 'HIGH' : team.strength <= 73 ? 'LOW' : 'MEDIUM'
   const financial = team.identity === 'Possession' || team.strength <= 74 ? 'HIGH' : team.identity === 'Direct' ? 'LOW' : 'MEDIUM'
   const youth = team.identity === 'Variable' || team.strength <= 73 ? 'HIGH' : team.identity === 'Defensive / counter' ? 'MEDIUM' : 'LOW'
   const continental = team.strength >= 76 ? 'MEDIUM' : 'LOW'
+  const visionCandidates=team.strength>=82?['Win the league','Develop young players','Sign established players','Maintain financial stability']:team.strength>=76?['Finish in the top 4','Develop young players','Improve the squad','Keep wages under control']:team.strength>=70?['Finish in the top half','Push for top 6','Develop young players','Make a profit']:['Avoid relegation','Improve squad depth','Keep wages under control','Develop young players','Sell players for profit']
   return {
     priorities: { domestic, financial, youth, continental },
     expectation: team.strength >= 82 ? 'Challenge for the title' : team.strength >= 78 ? 'Qualify for Champions League' : team.strength >= 74 ? 'Finish in the top 6' : team.strength >= 70 ? 'Finish in the top 10' : 'Avoid relegation',
-    objectives: [], confidence: 70, confidenceHistory: [], negotiationUsed: false, fired: false,
+    objectives: [], vision:visionCandidates.slice(0,3), confidence: 70, confidenceHistory: [], negotiationUsed: false, fired: false,
   }
 }
 
@@ -150,11 +167,13 @@ function addClubDefaults(team, career) {
   team.wageSpend = Number.isFinite(team.wageSpend) ? team.wageSpend : wageSpend
   team.wageBudget = Number.isFinite(team.wageBudget) ? team.wageBudget : Math.ceil(Math.max(wageSpend * 1.28, 250000) / 1000) * 1000
   team.finances ??= { balance: startingBalance(team), seasonIncome: 0, seasonExpenses: 0, seasonProfit: 0, previousSeasonProfit: 0 }
+  ensureFinance(team)
   team.board ??= createBoard(team)
   team.board.priorities ??= createBoard(team).priorities
   for (const key of ['domestic','financial','youth','continental']) team.board.priorities[key] = boardPriority(team.board.priorities[key])
   team.board.expectation ??= createBoard(team).expectation
   team.board.objectives ??= []
+  team.board.vision ??= createBoard(team).vision
   team.board.confidence = clamp(Number(team.board.confidence ?? 70), 0, 100)
   team.board.confidenceHistory ??= []
   team.board.negotiationUsed ??= false
@@ -235,6 +254,7 @@ export function migrateCareer(career) {
   career.negotiationHistory ??= []
   career.lastBoardReview ??= null
   career.boardReviews ??= []
+  career.seasonHistory ??= []
   career.transferHistory ??= []
   career.playerSeasonHistory ??= {}
   career.playerSeasonClubStats ??= []
@@ -288,7 +308,7 @@ function repairTeamLineup(career,team){
   const take=(current,count,eligible)=>{
     const next=(current??[]).filter(id=>team.roster.includes(id)&&!used.has(id)&&eligible(career.players[id])).slice(0,count)
     next.forEach(id=>used.add(id))
-    while(next.length<count){const candidate=team.roster.map(id=>career.players[id]).filter(player=>player&&!used.has(player.id)&&eligible(player)).sort((a,b)=>b.overall-a.overall)[0];if(!candidate)break;next.push(candidate.id);used.add(candidate.id)}
+    while(next.length<count){const candidates=team.roster.map(id=>career.players[id]).filter(player=>player&&!used.has(player.id)&&eligible(player));const candidate=(candidates.length?candidates:team.roster.map(id=>career.players[id]).filter(player=>player&&!used.has(player.id))).sort((a,b)=>b.overall-a.overall)[0];if(!candidate)break;next.push(candidate.id);used.add(candidate.id)}
     return next
   }
   const gkCurrent=team.lineup?.gk
@@ -299,6 +319,19 @@ function repairTeamLineup(career,team){
   const atts=take(team.lineup?.atts,shape.atts,player=>['ATT','MID'].includes(positionGroup(player)))
   if(gk&&defs.length===shape.defs&&mids.length===shape.mids&&atts.length===shape.atts)team.lineup={gk,defs,mids,atts}
   syncBench(team)
+}
+
+export function calculatePlayerMarketValue(player, team) {
+  const ovr = player.overall ?? 60, age = player.age ?? 25
+  const base = Math.max(0, ovr - 48) ** 2.4 * 7000
+  const potential = 1 + Math.min(1.2, Math.max(0, (player.potential ?? ovr) - ovr) * (age < 23 ? .035 : .012))
+  const ageFactor = age < 21 ? 1.32 : age < 24 ? 1.22 : age < 28 ? 1 : age < 31 ? .78 : .56
+  const clubFactor = clamp(1 + ((team?.strength ?? 70) - 70) * .025, .72, 1.65)
+  const contract = clamp(.65 + (player.contractYears ?? 2) * .13, .7, 1.3)
+  const position = player.position==='GK'||player.positionGroup==='GK'?.9:1
+  const rating=player.seasonStats?.ratingMatches?(player.seasonStats.ratingTotal/player.seasonStats.ratingMatches):6.5
+  const performance=clamp(1+(rating-6.5)*.035,-.12, .14)
+  return Math.round(clamp(base * potential * ageFactor * clubFactor * contract * position * performance, 150000, 250000000) / 50000) * 50000
 }
 
 function makePlayer(team, index, position, strength, random, ordinal = 0, claimedRealPlayers = new Set()) {
@@ -322,11 +355,11 @@ function makePlayer(team, index, position, strength, random, ordinal = 0, claime
   player.overall = overallRating(player)
   player.OVR=player.overall
   player.potential ||= clamp(player.overall + Math.round(random() * (player.age < 23 ? 18 : 8)), player.overall, 99)
-  player.marketValue ||= Math.round(clamp((player.overall - 40) ** 2 * 5500 * (group === 'GK' ? 0.82 : 1) * (age < 22 ? 1.17 : age > 30 ? 0.76 : 1) * (1 + (team.strength - 70) * .025) * (1+(player.potential-player.overall)*.018), 350000, 18500000) / 50000) * 50000
-  player.askingPrice=Math.ceil(player.marketValue*(1.06+stableUnit(`${id}:asking`)*.22)/50000)*50000
-  player.salaryWeekly ||= Math.round(clamp((player.overall - 38) ** 2 * 82 * (1 + (team.strength - 70) * .025) / 1000, 1, 200) * 1000); player.wage = player.salaryWeekly
+  player.marketValue ||= calculatePlayerMarketValue(player, team)
+  player.askingPrice=Math.ceil(player.marketValue*(player.transferListed?.92:1.18+Math.min(.35,(player.contractYears??2)*.045)+Math.max(0,team.strength-75)*.012)/50000)*50000
+  player.salaryWeekly ||= Math.round(clamp((player.overall - 42) ** 2 * 60 * (1 + (team.strength - 70) * .045) * (1+Math.max(0,player.potential-player.overall)*.012) / 1000, 1, 1200) * 1000); player.wage = player.salaryWeekly
   player.contractExpiry = player.contractYears + 1
-  player.releaseClause = Math.ceil(player.marketValue * (1.35 + stableUnit(`${id}:clause`) * .4) / 50000) * 50000
+  player.releaseClause = Math.ceil(player.marketValue * (1.65 + stableUnit(`${id}:clause`) * .7 + Math.max(0,team.strength-75)*.025) / 50000) * 50000
   return player
 }
 
@@ -385,6 +418,7 @@ export function createCareer(seed = Date.now(), leagueId = null) {
     team.roster.map(id=>players[id]).filter(player=>!starters.has(player.id)&&positionGroup(player)!=='GK').sort((a,b)=>(a.overall+(a.potential??a.overall)*.15)-(b.overall+(b.potential??b.overall)*.15)||b.age-a.age).slice(0,listedCount).forEach(player=>{player.transferListed=true})
   })
   Object.values(players).forEach(player=>{player.contractExpiryDate??=`${Number(careerDate.slice(0,4))+Math.max(0,player.contractExpiry-1)}-06-30`})
+  teams.forEach(ensureFinance)
   teams.forEach(team=>{if(team.id!==null&&team.strength<74){const starters=new Set([team.lineup.gk,...team.lineup.defs,...team.lineup.mids,...team.lineup.atts]);team.roster.map(id=>players[id]).filter(player=>!starters.has(player.id)&&player.age<=22&&player.positionGroup!=='GK').slice(0,2).forEach(player=>{player.loanListed=true})}})
   return { saveVersion: SAVE_VERSION, saveSlot:1, season: 1, currentMatchday: 1, careerDate, managedTeamId: null, manager: { name: 'Manager' }, leagues: LEAGUES.filter(league=>!leagueId||league.id===leagueId).map(league=>({...league,teamIds:teams.filter(team=>team.leagueId===league.id).map(team=>team.id)})), teams, players, fixtures: makeFixtures(teams,1,careerDate), completedMatches: [], transferHistory: [], transferOffers: [], loans: [], loanOffers:[], shortlist:[], loanNegotiations: [], loanNegotiation:null, scheduledEvents: [], processedCareerEvents: [], inbox: [{ id: 'welcome', type: 'NEWS', date: careerDate, text: 'Welcome to the league. Choose your club to manage.' }], lastResult: null, currentMatchFixtureId: null, settings: {}, seed, activeNegotiation: null, negotiationHistory: [], lastBoardReview: null, boardReviews: [] }
 }
@@ -486,7 +520,7 @@ function processContractDates(career) {
     const days = Math.ceil((utcDate(player.contractExpiryDate) - utcDate(career.careerDate)) / 86400000)
     player.contractStatus = days <= 0 ? 'Expired' : days <= 30 ? 'Expiring Soon' : 'Active'
     if(days>30&&days<=180)shortlistNotice(career,player,'CONTRACT-180',`${player.name}'s contract expires in six months.`)
-    if(days<=0&&player.teamId&&!player.loanId){const former=career.teams.find(team=>team.id===player.teamId);if(former){closePlayerSeasonClubSegment(career,player.id);former.roster=former.roster.filter(id=>id!==player.id);former.wageSpend=Math.max(0,former.wageSpend-(player.salaryWeekly??0));if(former.lineup.gk===player.id)former.lineup.gk=null;for(const key of ['defs','mids','atts'])former.lineup[key]=(former.lineup[key]??[]).filter(id=>id!==player.id);repairTeamLineup(career,former);player.formerClubId=former.id;player.teamId=null;player.clubId=null;player.status='FREE_AGENT';player.transferListed=false;player.loanListed=false;career.freeAgents??=[];if(!career.freeAgents.includes(player.id))career.freeAgents.push(player.id);shortlistNotice(career,player,'FREE_AGENT',`${player.name} is now available as a free agent.`)}}
+    if(days<=0&&player.teamId&&!player.loanId){const former=career.teams.find(team=>team.id===player.teamId),keepers=former?.roster.map(id=>career.players[id]).filter(candidate=>positionGroup(candidate)==='GK').length??0,defenders=former?.roster.map(id=>career.players[id]).filter(candidate=>positionGroup(candidate)==='DEF').length??0;if(former&&former.roster.length>18&&(positionGroup(player)!=='GK'||keepers>1)&&(positionGroup(player)!=='DEF'||defenders>4)){closePlayerSeasonClubSegment(career,player.id);former.roster=former.roster.filter(id=>id!==player.id);former.wageSpend=Math.max(0,former.wageSpend-(player.salaryWeekly??0));if(former.lineup.gk===player.id)former.lineup.gk=null;for(const key of ['defs','mids','atts'])former.lineup[key]=(former.lineup[key]??[]).filter(id=>id!==player.id);repairTeamLineup(career,former);player.formerClubId=former.id;player.teamId=null;player.clubId=null;player.status='FREE_AGENT';player.transferListed=false;player.loanListed=false;career.freeAgents??=[];if(!career.freeAgents.includes(player.id))career.freeAgents.push(player.id);shortlistNotice(career,player,'FREE_AGENT',`${player.name} is now available as a free agent.`)}}
     const noticeType = days <= 0 ? 'expired' : days <= 30 ? '30-day-warning' : null
     if (noticeType) {
       const id = `contract-${noticeType}-${player.id}-${player.contractExpiryDate}`
@@ -506,8 +540,8 @@ function simulateFixturesForDate(career, random, simulateManagedFixture = false)
     const home = career.teams.find(team => team.id === fixture.homeTeamId)
     const away = career.teams.find(team => team.id === fixture.awayTeamId)
     if (!home || !away) continue
-    creditFixtureIncome(home, true)
-    creditFixtureIncome(away, false)
+    creditFixtureIncome(career,home, true)
+    creditFixtureIncome(career,away, false)
     const quick = simulateQuickFixture(career, home, away, random)
     for (const [playerId, line] of Object.entries(quick.statistics.players)) {
       const player = career.players[playerId]
@@ -632,7 +666,7 @@ function completeLoanPurchase(career,loan){
   const covered=Math.round((player.salaryWeekly??0)*(loan.wageContribution??100)/100)
   parent.wageSpend=Math.max(0,parent.wageSpend-Math.max(0,(player.salaryWeekly??0)-covered))
   buyer.wageSpend+=Math.max(0,(player.salaryWeekly??0)-covered)
-  parent.transferBudget+=fee;buyer.transferBudget-=fee;parent.finances.balance+=fee;parent.finances.seasonIncome+=fee;buyer.finances.balance-=fee;buyer.finances.seasonExpenses+=fee
+  parent.transferBudget+=fee;buyer.transferBudget-=fee;recordFinance(career,parent,'income','transfers',fee,`Loan purchase: ${player.name}`);recordFinance(career,buyer,'expense','transfers',fee,`Loan purchase: ${player.name}`)
   player.status='CONTRACTED';delete player.loanId;delete player.loanParentClubId;player.transferListed=false;player.loanListed=false
   player.contractYears=3;player.contractExpiry=career.season+3;player.contractExpiryDate=`${Number(career.careerDate.slice(0,4))+3}-06-30`;player.contractStatus='Active';player.squadRole='Rotation'
   loan.status='CONVERTED';loan.conversionDate=career.careerDate;loan.completedFee=fee
@@ -799,6 +833,7 @@ export function advanceCareerDay(career, { simulateManagedFixture = false, inclu
   processContractDates(career)
   runAiClubManagement(career)
   updateCurrentMatchday(career)
+  if(career.fixtures.length&&career.fixtures.every(fixture=>fixture.status==='played'))startNextSeason(career)
   const newInbox = career.inbox.slice(0, Math.max(0, career.inbox.length - inboxBefore))
   const incomingOfferArrived = career.inbox.some(event => event.date === career.careerDate && event.offerId)
   const important = Boolean(userFixture || responseEvents.length || scheduledEvents.some(event => event.important) ||
@@ -811,17 +846,19 @@ export function advanceCareerDay(career, { simulateManagedFixture = false, inclu
 // Uses the same calendar day processing and quick-match rules as normal career advancement.
 export async function simulateCareerToSeasonEnd(career, onProgress = () => {}) {
   if (!career?.fixtures?.length) return { ok: false, message: 'This career has no fixtures to simulate.' }
+  const completedSeason=career.season
+  const total=career.fixtures.length
   let daysAdvanced = 0
   let includeCurrentDate = true
-  while (!career.fixtures.every(fixture => fixture.status === 'played')) {
+  while (career.season===completedSeason&&!career.fixtures.every(fixture => fixture.status === 'played')) {
     const result = advanceCareerDay(career, { simulateManagedFixture: true, includeCurrentDate })
     if (!result.ok) return { ...result, daysAdvanced }
     includeCurrentDate = false
     daysAdvanced++
-    onProgress({ date: career.careerDate, daysAdvanced, played: career.fixtures.filter(fixture => fixture.status === 'played').length, total: career.fixtures.length })
+    onProgress({ date: career.careerDate, daysAdvanced, played: career.season===completedSeason?career.fixtures.filter(fixture => fixture.status === 'played').length:total, total })
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  return { ok: true, date: career.careerDate, daysAdvanced, played: career.fixtures.length, total: career.fixtures.length }
+  return { ok: true, date: career.careerDate, daysAdvanced, played:total, total, completedSeason, season:career.season }
 }
 
 export function simulateToNextEvent(career, maxDays = 400) {
@@ -1013,11 +1050,9 @@ function simulateQuickFixture(career, home, away, random) {
   return { homeGoals: teams.home.goals, awayGoals: teams.away.goals, statistics: { teams, players }, events }
 }
 
-function creditFixtureIncome(team, home) {
-  const income = Math.round((home ? 620000 : 430000) + (team.strength ?? 70) * (home ? 9800 : 7200))
-  team.finances ??= { balance: 0, seasonIncome: 0, seasonExpenses: 0, seasonProfit: 0, previousSeasonProfit: 0 }
-  team.finances.balance += income
-  team.finances.seasonIncome += income
+function creditFixtureIncome(career,team, home) {
+  const income = home ? Math.round(520000+(team.strength??70)**2*145) : 0
+  if(home)recordFinance(career,team,'income','matchday',income,'Home matchday revenue')
 }
 
 export function applyManagedMatch(career, fixtureId, match) {
@@ -1034,7 +1069,7 @@ export function applyManagedMatch(career, fixtureId, match) {
     if(FORMATIONS[formation]&&gk?.id&&lines.defs.length===FORMATIONS[formation].defs&&lines.mids.length===FORMATIONS[formation].mids&&lines.atts.length===FORMATIONS[formation].atts){managed.formation=formation;managed.lineup={gk:gk.id,...lines}}
   }
   fixture.status='played'; fixture.result={homeGoals,awayGoals,stats:match.statistics,events:match.events,goals:match.goals}; applyTableResult(home,away,homeGoals,awayGoals)
-  creditFixtureIncome(home, true); creditFixtureIncome(away, false)
+  creditFixtureIncome(career,home, true); creditFixtureIncome(career,away, false)
   const actors=[...match.players,...match.opponents,...Object.values(match.goalkeepers)]
   actors.forEach(actor=>{
     const player=career.players[actor.id]; if(!player)return
@@ -1058,7 +1093,9 @@ export function applyManagedMatch(career, fixtureId, match) {
     if(managed.board.confidence===0&&!managed.board.fired){managed.board.fired=true;career.inbox.unshift({id:`manager-fired-${career.season}-${fixtureId}`,type:'BOARD',date:career.careerDate,text:'The board has dismissed you after confidence fell to zero.'})}
     else career.inbox.unshift({id:review.id,type:'BOARD REVIEW',date:career.careerDate,text:`Board confidence ${review.change>=0?'increased':'decreased'} by ${Math.abs(review.change)} after the match.`})
   }
-  updateCurrentMatchday(career); return true
+  updateCurrentMatchday(career)
+  if(career.fixtures.every(item=>item.status==='played'))startNextSeason(career)
+  return true
 }
 export function negotiateBoardExpectations(career, option) {
   const team=career?.teams?.find(item=>item.id===career.managedTeamId)
@@ -1203,8 +1240,8 @@ export function transferPlayer(career, playerId, buyingTeamId, fee = null, contr
   buyer.wageSpend+=salary; player.salaryWeekly=salary;player.wage=salary
   if(contract){player.contractYears=contract.years;player.contractExpiry=career.season+contract.years;player.contractExpiryDate=`${Number(career.careerDate.slice(0,4))+contract.years}-06-30`;player.contractStatus='Active';player.squadRole=contract.squadRole;if(Number.isFinite(contract.releaseClause))player.releaseClause=contract.releaseClause}
   player.transferListed=false;player.loanListed=false
-  if(seller){seller.finances.balance+=transferFee;seller.finances.seasonIncome+=transferFee}
-  buyer.finances.balance-=transferFee; buyer.finances.seasonExpenses+=transferFee
+  if(seller)recordFinance(career,seller,'income','transfers',transferFee,`Player sale: ${player.name}`)
+  if(!freeAgent)recordFinance(career,buyer,'expense','transfers',transferFee,`Player signing: ${player.name}`)
   if(seller&&seller.lineup.gk===playerId)seller.lineup.gk=seller.roster.find(id=>career.players[id].position==='GK')??null
   if(seller){seller.lineup.defs=seller.lineup.defs.filter(id=>id!==playerId);seller.lineup.mids=(seller.lineup.mids??[]).filter(id=>id!==playerId);seller.lineup.atts=seller.lineup.atts.filter(id=>id!==playerId)}
   const shape=seller&&FORMATIONS[seller.formation??'4-4-2']
@@ -1357,12 +1394,20 @@ function boardReviewFor(career, team) {
   const youngAppearances=team.roster.map(id=>career.players[id]).filter(player=>player.age<=21).reduce((sum,player)=>sum+(player.seasonStats?.appearances??0),0)
   const financialMet=team.finances.seasonIncome-team.finances.seasonExpenses>0
   const youthTarget=team.board.priorities.youth==='HIGH'?5:team.board.priorities.youth==='MEDIUM'?3:1
+  const visionObjectives=(team.board.vision??[]).map((label,index)=>{
+    const met=label.includes('young')?youngAppearances>=3:label.toLowerCase().includes('profit')||label.toLowerCase().includes('financial')?financialMet:label.toLowerCase().includes('wage')?team.wageSpend<=team.wageBudget:label.includes('relegation')?place<ordered.length-2:label.includes('top 4')?place<=4:label.includes('top half')?place<=Math.ceil(ordered.length/2):label.includes('top 6')?place<=6:label==='Win the league'?place===1:true
+    return {key:`vision-${index}`,label,target:label,result:`${place} place`,status:met?'ACHIEVED':'NOT ACHIEVED',active:true}
+  })
+  const domesticDelta=place===1?14:place<=3?10:place<=6?6:domesticMet?3:place>=ordered.length-1?-15:place>=ordered.length-3?-10:-6
+  const profit=team.finances.seasonIncome-team.finances.seasonExpenses
+  const youthMet=youngAppearances>=youthTarget
+  const confidenceChange=clamp(domesticDelta+(profit>0?3:-3)+(youthMet?2:-1),-18,18)
   return {teamId:team.id,teamName:team.name,season:career.season,objectives:[
     {key:'domestic',label:'Domestic Success',target:expectation,result:`${place}${place===1?'st':place===2?'nd':place===3?'rd':'th'} place`,status:domesticMet?'ACHIEVED':'NOT ACHIEVED',active:true},
     {key:'financial',label:'Financial Profit',target:'Finish with positive finances',result:`€${((team.finances.seasonIncome-team.finances.seasonExpenses)/1000000).toFixed(2)}M`,status:financialMet?'ACHIEVED':'NOT ACHIEVED',active:true},
-    {key:'youth',label:'Youth Development',target:`Give U21 players ${youthTarget}+ appearances`,result:`${youngAppearances} appearances`,status:youngAppearances>=youthTarget?'ACHIEVED':'NOT ACHIEVED',active:true},
+    {key:'youth',label:'Youth Development',target:`Give U21 players ${youthTarget}+ appearances`,result:`${youngAppearances} appearances`,status:youthMet?'ACHIEVED':'NOT ACHIEVED',active:true},
     {key:'continental',label:'Continental Success',target:'Future objective · no active competition',result:'Not assessed this season',status:'FUTURE',active:false},
-  ],place,youngAppearances,financialResult:team.finances.seasonIncome-team.finances.seasonExpenses}
+    ...visionObjectives],place,youngAppearances,financialResult:profit,confidenceChange}
 }
 
 function calculateNextResources(team, review) {
@@ -1386,10 +1431,32 @@ export function conductBoardReview(career) {
   if(career.lastBoardReview?.season===career.season)return {ok:true,review:career.lastBoardReview}
   const reviews=[]
   for(const team of career.teams){
-    team.finances.seasonExpenses+=team.wageSpend*5
-    team.finances.balance-=team.wageSpend*5
+    recordFinance(career,team,'expense','wages',team.wageSpend*52,'Season wages')
     team.finances.seasonProfit=team.finances.seasonIncome-team.finances.seasonExpenses
     const review=boardReviewFor(career,team)
+    const strength=team.strength??70, order=leagueTable(career,team.leagueId), place=review.place
+    const commercial=Math.round(2500000+strength**2*1500)
+    const sponsorship=Math.round(1200000+strength**2*1150+Math.max(0,order.length-place)*120000)
+    const broadcast=Math.round(1500000+strength**2*800+Math.max(0,order.length-place)*100000)
+    const prize=Math.max(0,Math.round((order.length-place+1)*strength*11000))
+    recordFinance(career,team,'income','commercial',commercial,'Season commercial revenue')
+    recordFinance(career,team,'income','sponsorship',sponsorship,'Season sponsorship')
+    recordFinance(career,team,'income','broadcasting',broadcast,'League broadcasting distribution')
+    recordFinance(career,team,'income','prizeMoney',prize,'League position prize money')
+    team.finances.seasonProfit=team.finances.seasonIncome-team.finances.seasonExpenses
+    review.financialResult=team.finances.seasonProfit
+    for(const objective of review.objectives.filter(item=>item.key.startsWith('vision-'))){if(objective.label.toLowerCase().includes('profit')||objective.label.toLowerCase().includes('financial'))objective.status=team.finances.seasonProfit>0?'ACHIEVED':'NOT ACHIEVED';if(objective.label.toLowerCase().includes('wage'))objective.status=team.wageSpend<=team.wageBudget?'ACHIEVED':'NOT ACHIEVED'}
+    const visionAdjustment=review.objectives.filter(item=>item.key.startsWith('vision-')).reduce((sum,item)=>sum+(item.status==='ACHIEVED'?2:-1),0)
+    review.confidenceChange=clamp(review.confidenceChange+visionAdjustment,-18,18)
+    review.confidenceChange=clamp((review.place===1?14:review.place<=3?10:review.place<=6?6:review.objectives[0].status==='ACHIEVED'?3:review.place>=leagueTable(career,team.leagueId).length-1?-15:review.place>=leagueTable(career,team.leagueId).length-3?-10:-6)+(team.finances.seasonProfit>0?3:-3)+(review.youngAppearances>=(team.board.priorities.youth==='HIGH'?5:team.board.priorities.youth==='MEDIUM'?3:1)?2:-1),-18,18)
+    review.objectives[1].result=`€${(team.finances.seasonProfit/1000000).toFixed(2)}M`
+    review.objectives[1].status=team.finances.seasonProfit>0?'ACHIEVED':'NOT ACHIEVED'
+    const before=clamp(Number(team.board.confidence??70),0,100)
+    const confidenceChange=clamp(review.confidenceChange+(team.board.priorities.financial==='HIGH'?(team.finances.seasonProfit>0?2:-3):0),-18,18)
+    team.board.confidence=clamp(before+confidenceChange,0,100)
+    team.board.confidenceHistory??=[]
+    team.board.confidenceHistory.unshift({id:`confidence-${career.season}-${team.id}`,season:career.season,from:before,to:team.board.confidence,change:team.board.confidence-before,reasons:[`Finished ${place}${place===1?'st':place===2?'nd':place===3?'rd':'th'}`,team.finances.seasonProfit>0?'Season profit':'Season loss']})
+    review.confidence={before,after:team.board.confidence,change:team.board.confidence-before}
     team.finances.previousSeasonProfit=team.finances.seasonProfit
     team.board.objectives=review.objectives
     review.resources=calculateNextResources(team,review)
@@ -1404,8 +1471,14 @@ export function conductBoardReview(career) {
 
 export function startNextSeason(career) {
   if(!career.fixtures.every(fixture=>fixture.status==='played'))return {ok:false,message:'The current season is not complete.'}
+  career.careerDate=careerSeasonEndDate(career.careerDate??INITIAL_CAREER_DATE)
+  processContractDates(career)
   if(career.lastBoardReview?.season!==career.season)conductBoardReview(career)
   career.playerSeasonClubStats??=[]
+  career.seasonHistory??=[]
+  const table=leagueTable(career)
+  career.seasonHistory.unshift({season:career.season,date:career.careerDate,standings:table.map((team,index)=>({teamId:team.id,position:index+1,table:{...team.table}})),playerStats:Object.values(career.players).filter(player=>player.seasonStats?.appearances).map(player=>({playerId:player.id,season:career.season,stats:{...player.seasonStats}})),review:career.lastBoardReview,clubFinances:career.teams.map(team=>({teamId:team.id,...structuredClone(team.finances)}))})
+  if(career.seasonHistory.length>20)career.seasonHistory.length=20
   for(const player of Object.values(career.players))closePlayerSeasonClubSegment(career,player.id,career.careerDate)
   career.season++
   career.currentMatchday=1
@@ -1413,7 +1486,8 @@ export function startNextSeason(career) {
   career.teams.forEach(team=>{
     team.table={played:0,wins:0,draws:0,losses:0,gf:0,ga:0,points:0}
     team.finances.seasonIncome=0;team.finances.seasonExpenses=0;team.finances.seasonProfit=0
-    team.board.expectation=createBoard(team).expectation;team.board.negotiationUsed=false;team.board.fired=false;team.board.confidence=Math.max(45,team.board.confidence??70)
+    team.finances.categories={income:{matchday:0,sponsorship:0,broadcasting:0,prizeMoney:0,transfers:0,commercial:0},expenses:{transfers:0,wages:0,other:0}}
+    team.board.expectation=createBoard(team).expectation;team.board.negotiationUsed=false;team.board.fired=false
     team.board.objectives=[]
   })
   Object.values(career.players).forEach(player=>{player.seasonStats=blankSeasonStats();player.appearances=0;const expiry=player.contractExpiryDate??dateFromExpirySeason(career,player.contractExpiry);const days=Math.ceil((utcDate(expiry)-utcDate(career.careerDate))/86400000);player.contractStatus=days<=0?'Expired':days<=30?'Expiring Soon':'Active';player.fitness=Math.min(100,(player.fitness??80)+15)})

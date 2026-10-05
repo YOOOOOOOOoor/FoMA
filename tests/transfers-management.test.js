@@ -108,17 +108,21 @@ test('unlisted shortlisted player uses the existing release-clause negotiation p
   assert.equal(career.activeNegotiation.agreedFee,player.releaseClause)
 })
 
-test('full career simulation completes eligible fixtures once with coherent results',async()=>{
+test('full career simulation rolls over once and archives the completed season',async()=>{
   const career=createCareer(218,'premier-league')
   career.managedTeamId=career.teams[0].id
   career.careerDate=career.fixtures[0].scheduledDate
-  const fixtureIds=new Set(career.fixtures.map(fixture=>fixture.id))
-  assert.equal(fixtureIds.size,career.fixtures.length)
+  const firstSeasonFixtures=career.fixtures.slice()
+  const fixtureIds=new Set(firstSeasonFixtures.map(fixture=>fixture.id))
+  assert.equal(fixtureIds.size,firstSeasonFixtures.length)
   const result=await simulateCareerToSeasonEnd(career)
   assert.equal(result.ok,true)
-  assert.equal(career.fixtures.every(fixture=>fixture.status==='played'),true)
-  assert.equal(new Set(career.completedMatches.map(match=>match.fixtureId)).size,career.fixtures.length)
-  for(const fixture of career.fixtures){
+  assert.equal(result.completedSeason,1)
+  assert.equal(career.season,2)
+  assert.equal(career.seasonHistory[0].season,1)
+  assert.equal(career.fixtures.some(fixture=>fixture.season===2&&fixture.status==='scheduled'),true)
+  assert.equal(new Set(career.completedMatches.map(match=>match.fixtureId)).size,firstSeasonFixtures.length)
+  for(const fixture of firstSeasonFixtures){
     assert.ok(fixture.result.homeGoals>=0&&fixture.result.awayGoals>=0)
     const stats=fixture.result.statistics?.teams
     if(stats){for(const side of ['home','away'])assert.ok(stats[side].goals<=stats[side].shotsOnTarget&&stats[side].shotsOnTarget<=stats[side].shots)}
