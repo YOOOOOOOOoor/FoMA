@@ -2411,3 +2411,43 @@
 }
 
 .mg-squad-management-row{align-items:stretch;gap:16px}.mg-squad-actions{display:flex;flex-direction:column;gap:8px;min-width:170px}.mg-squad-actions .mg-table-action{width:100%;min-height:38px}.mg-text-button{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0}.mg-modal form{display:grid;gap:12px}.mg-modal form label{display:grid;gap:6px}.mg-modal form input,.mg-modal form select{width:100%;min-height:38px;padding:8px;border:1px solid #d5ded7;border-radius:6px}@media(max-width:700px){.mg-squad-management-row{align-items:stretch;flex-direction:column}.mg-squad-actions{min-width:0}}
+
+/* Targeted mobile behavior for squad and transfer tools. */
+.mg-full-sim { display:flex; align-items:flex-start; flex-direction:column; gap:12px; }
+.mg-full-sim-progress { display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px 14px; width:100%; color:#a8bbb0; font-size:12px; }
+.mg-full-sim-progress b { color:#d9f1e0; }
+.mg-full-sim-progress progress { grid-column:1/-1; width:100%; accent-color:#68d397; }
+.mg-contract-actions { min-width:150px; }
+.mg-contract-actions button { display:block; margin:4px 0; min-height:36px; white-space:normal; }
+.mg-market-tabs,.mg-squad-tabs { min-width:0; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:thin; }
+.mg-market-tabs button,.mg-squad-tabs button { flex:0 0 auto; min-height:42px; }
+.mg-main,.mg-panel,.mg-layout,.mg-lineup-editor { min-width:0; }
+.mg-modal { box-sizing:border-box; }
+@media (max-width:700px) {
+  .mg-main { padding:16px 12px 36px; }
+  .mg-panel { padding:16px 12px; }
+  .mg-page-title h1,.mg-page-title h2 { font-size:clamp(21px,6vw,28px); overflow-wrap:anywhere; }
+  .mg-formation-pitch { max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+  .mg-formation-pitch > .mg-formation-row { min-width:470px; }
+  .mg-formation-selector > div { overflow-x:auto; flex-wrap:nowrap; padding-bottom:6px; }
+  .mg-formation-selector button { flex:0 0 auto; min-height:42px; }
+  .mg-lineup-slot { min-width:0; }
+  .mg-lineup-card { min-width:0; grid-template-columns:minmax(0,1fr) auto; }
+  .mg-lineup-card-name { overflow-wrap:anywhere; white-space:normal; }
+  .mg-fixture-day,.mg-fixture { min-width:0; }
+  .mg-modal-backdrop { padding:10px; }
+  .mg-modal { max-height:calc(100dvh - 20px); padding:22px 14px; }
+  .mg-loan-player { min-width:0; }
+  .mg-loan-player > div:first-child,.mg-loan-player small,.mg-loan-player b { min-width:0; overflow-wrap:anywhere; }
+  .mg-negotiation-player { grid-template-columns:auto minmax(0,1fr); }
+  .mg-negotiation-player > b { grid-column:2; }
+  .mg-incoming-actions,.mg-contract-extension { min-width:0; }
+  .mg-incoming-actions button,.mg-contract-extension button { min-height:42px; }
+  .mg-contract-actions button { width:100%; }
+}
+@media (max-width:360px) {
+  .mg-main { padding-inline:8px; }
+  .mg-panel { padding-inline:9px; }
+  .mg-calendar-actions { display:grid; grid-template-columns:1fr; width:100%; }
+  .mg-calendar-actions button { width:100%; min-height:42px; }
+}

@@ -1495,3 +1495,27 @@
     gap: 5px;
   }
 }
+
+.simulation-progress { display:grid; grid-template-columns:1fr auto; align-items:center; gap:6px 12px; margin-top:10px; color:#a7baaf; font:11px "DM Mono"; }
+.simulation-progress b { color:#d8f0df; }
+.simulation-progress progress { grid-column:1/-1; width:100%; accent-color:#68d397; }
+@media (max-width:650px) {
+  .app-shell,.content,.match-card { min-width:0; max-width:100%; }
+  .content { padding:12px; }
+  .score-team { overflow-wrap:anywhere; }
+  .match-actions { width:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+  .match-actions .hud-button { min-height:42px; padding:9px 6px; font-size:10px; }
+  .match-controls .speed-controls { width:100%; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+  .match-controls .speed-controls button { min-height:42px; }
+  .pitch-wrap { overflow:hidden; }
+  .pitch-wrap canvas,.pitch-wrap svg { max-width:100%; height:auto; }
+  .lower-grid { grid-template-columns:minmax(0,1fr); }
+  .activity-modal { width:calc(100vw - 20px); max-height:75dvh; overflow:auto; }
+  .debug-panel { max-height:45dvh; overflow:auto; }
+}
+@media (max-width:360px) {
+  .content { padding:8px; }
+  .match-actions { grid-template-columns:1fr 1fr; }
+  .scoreboard { padding-inline:5px; gap:3px; }
+  .score-value { font-size:24px; }
+}
