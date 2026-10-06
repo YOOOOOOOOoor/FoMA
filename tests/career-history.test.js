@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   createCareer, migrateCareer, playerSeasonTotals, recordPlayerMatchStats, saveCareer, loadCareer,
-  startNextSeason, transferPlayer,
+  completeSeason, startNextSeason, transferPlayer,
 } from '../src/management/career.js'
 
 function setup(seed=71){
@@ -16,7 +16,7 @@ function match(career,player,{goals=0,assists=0,minutes=90}={}){
   recordPlayerMatchStats(career,player,{appearances:1,minutes,goals,assists,shots:goals+2,shotsOnTarget:goals+1,passesAttempted:20,passesCompleted:16,successfulTackles:1,rating:7.5})
 }
 function move(career,player,club){const result=transferPlayer(career,player.id,club.id,1_000_000);assert.equal(result.ok,true,result.message)}
-function finishSeason(career){career.fixtures.forEach(fixture=>{fixture.status='played'});assert.equal(startNextSeason(career).ok,true)}
+function finishSeason(career){career.fixtures.forEach(fixture=>{fixture.status='played'});assert.equal(completeSeason(career).ok,true);career.careerDate=career.offSeason.startDate;assert.equal(startNextSeason(career).ok,true)}
 
 test('no transfer keeps a full-season club segment and matching total',()=>{
   const {career,clubA,player}=setup()

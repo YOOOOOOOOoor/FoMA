@@ -9,7 +9,7 @@ export { CLUBS, LEAGUES } from './clubCatalog.js'
 export const SAVE_KEY = 'football_manager_save_v1'
 export const SAVE_SLOTS_KEY = 'foma_career_save_slots_v1'
 export const SAVE_SLOT_COUNT = 4
-export const SAVE_VERSION = 11
+export const SAVE_VERSION = 13
 export const FORMATIONS = FORMATION_SHAPES
 export const INITIAL_CAREER_DATE = '2025-08-01'
 export const TRANSFER_WINDOWS = Object.freeze([{name:'Summer',startMonth:7,startDay:1,endMonth:8,endDay:31},{name:'Winter',startMonth:1,startDay:1,endMonth:1,endDay:31}])
@@ -48,8 +48,9 @@ const blankSeasonStats = () => ({ ...Object.fromEntries(SEASON_STAT_FIELDS.map(f
 const ACCUMULATED_STAT_FIELDS = SEASON_STAT_FIELDS.filter(field => !['appearances','minutes','ratingTotal','ratingMatches','lastMatchRating','tacklesWon'].includes(field))
 function blankClubSeasonSegment(career,player,clubId,startDate=career.careerDate){
   career.playerSeasonClubStats??=[]
-  const sequence=career.playerSeasonClubStats.filter(item=>item.playerId===player.id&&item.seasonId===career.season).length+1
-  const segment={segmentId:`pscs-${career.season}-${player.id}-${sequence}`,playerId:player.id,seasonId:career.season,clubId:clubId??null,startDate,endDate:null,stats:blankSeasonStats()}
+  const seasonId=career.offSeason?.nextSeason??career.season
+  const sequence=career.playerSeasonClubStats.filter(item=>item.playerId===player.id&&item.seasonId===seasonId).length+1
+  const segment={segmentId:`pscs-${seasonId}-${player.id}-${sequence}`,playerId:player.id,seasonId,clubId:clubId??null,startDate,endDate:null,stats:blankSeasonStats()}
   career.playerSeasonClubStats.push(segment)
   return segment
 }
@@ -66,7 +67,8 @@ export function recordPlayerMatchStats(career,player,line) {
   season.tacklesWon=(season.tacklesWon??0)+(line.successfulTackles??0)
   season.ratingTotal+=(line.rating??6.2);season.ratingMatches++;season.lastMatchRating=line.rating??6.2
   const clubId=player.teamId??player.clubId??player.loanParentClubId??null
-  let segment=(career.playerSeasonClubStats??[]).filter(item=>item.playerId===player.id&&item.seasonId===career.season&&!item.endDate).at(-1)
+  const seasonId=career.offSeason?.nextSeason??career.season
+  let segment=(career.playerSeasonClubStats??[]).filter(item=>item.playerId===player.id&&item.seasonId===seasonId&&!item.endDate).at(-1)
   if(!segment||segment.clubId!==clubId){closePlayerSeasonClubSegment(career,player.id);segment=blankClubSeasonSegment(career,player,clubId)}
   const stats=segment.stats
   stats.appearances+=(line.appearances??0);stats.minutes+=(line.minutes??0)
@@ -96,13 +98,14 @@ const ensureFinance = team => {
   return team.finances
 }
 function careerSeasonEndDate(value){const year=Number(value.slice(0,4)),june=`${year}-06-30`;return value<=june?june:`${year+1}-06-30`}
+function nextSeasonKickoffDate(value){const year=Number(value.slice(0,4)),thisYear=`${year}-08-15`;return value<thisYear?thisYear:`${year+1}-08-15`}
 function recordFinance(career, team, direction, category, amount, description) {
   amount=Math.max(0,Math.round(amount||0)); if(!team||!amount)return
   const f=ensureFinance(team), bucket=direction==='income'?'income':'expenses'
   f.balance += direction==='income'?amount:-amount
   if(direction==='income')f.seasonIncome+=amount;else f.seasonExpenses+=amount
   f.categories[bucket][category]=(f.categories[bucket][category]??0)+amount
-  f.transactions.unshift({id:`fin-${career.season}-${career.careerDate}-${team.id}-${f.transactions.length+1}`,season:career.season,date:career.careerDate,direction,category,amount,description})
+  f.transactions.unshift({id:`fin-${career.season}-${career.careerDate}-${team.id}-${f.transactions.length+1}`,season:career.offSeason?.nextSeason??career.season,date:career.careerDate,direction,category,amount,description})
   if(f.transactions.length>500)f.transactions.length=500
 }
 
@@ -255,6 +258,8 @@ export function migrateCareer(career) {
   career.lastBoardReview ??= null
   career.boardReviews ??= []
   career.seasonHistory ??= []
+  career.offSeason ??= null
+  career.seasonStatus ??= career.offSeason?'OFF_SEASON':'ACTIVE'
   career.transferHistory ??= []
   career.playerSeasonHistory ??= {}
   career.playerSeasonClubStats ??= []
@@ -420,7 +425,7 @@ export function createCareer(seed = Date.now(), leagueId = null) {
   Object.values(players).forEach(player=>{player.contractExpiryDate??=`${Number(careerDate.slice(0,4))+Math.max(0,player.contractExpiry-1)}-06-30`})
   teams.forEach(ensureFinance)
   teams.forEach(team=>{if(team.id!==null&&team.strength<74){const starters=new Set([team.lineup.gk,...team.lineup.defs,...team.lineup.mids,...team.lineup.atts]);team.roster.map(id=>players[id]).filter(player=>!starters.has(player.id)&&player.age<=22&&player.positionGroup!=='GK').slice(0,2).forEach(player=>{player.loanListed=true})}})
-  return { saveVersion: SAVE_VERSION, saveSlot:1, season: 1, currentMatchday: 1, careerDate, managedTeamId: null, manager: { name: 'Manager' }, leagues: LEAGUES.filter(league=>!leagueId||league.id===leagueId).map(league=>({...league,teamIds:teams.filter(team=>team.leagueId===league.id).map(team=>team.id)})), teams, players, fixtures: makeFixtures(teams,1,careerDate), completedMatches: [], transferHistory: [], transferOffers: [], loans: [], loanOffers:[], shortlist:[], loanNegotiations: [], loanNegotiation:null, scheduledEvents: [], processedCareerEvents: [], inbox: [{ id: 'welcome', type: 'NEWS', date: careerDate, text: 'Welcome to the league. Choose your club to manage.' }], lastResult: null, currentMatchFixtureId: null, settings: {}, seed, activeNegotiation: null, negotiationHistory: [], lastBoardReview: null, boardReviews: [] }
+  return { saveVersion: SAVE_VERSION, saveSlot:1, season: 1, seasonStatus:'ACTIVE', offSeason:null, currentMatchday: 1, careerDate, managedTeamId: null, manager: { name: 'Manager' }, leagues: LEAGUES.filter(league=>!leagueId||league.id===leagueId).map(league=>({...league,teamIds:teams.filter(team=>team.leagueId===league.id).map(team=>team.id)})), teams, players, fixtures: makeFixtures(teams,1,careerDate), completedMatches: [], transferHistory: [], transferOffers: [], loans: [], loanOffers:[], shortlist:[], loanNegotiations: [], loanNegotiation:null, scheduledEvents: [], processedCareerEvents: [], inbox: [{ id: 'welcome', type: 'NEWS', date: careerDate, text: 'Welcome to the league. Choose your club to manage.' }], lastResult: null, currentMatchFixtureId: null, settings: {}, seed, activeNegotiation: null, negotiationHistory: [], lastBoardReview: null, boardReviews: [], seasonHistory:[] }
 }
 
 export function leagueTable(career, leagueId = null) {
@@ -595,7 +600,7 @@ function settleLoanMovement(career, loan) {
   const paidShare=Math.round((player.salaryWeekly??0)*(loan.wageContribution??100)/100)
   from.wageSpend=Math.max(0,from.wageSpend-paidShare);to.wageSpend+=paidShare
   from.transferBudget+=loan.loanFee;to.transferBudget=Math.max(0,to.transferBudget-loan.loanFee)
-  career.transferHistory??=[];loan.transferId??=`loan-${loan.id}`;career.transferHistory.unshift({id:loan.transferId,transferId:loan.transferId,playerId:player.id,playerName:player.name,seasonId:career.season,seasonNumber:career.season,date:career.careerDate,fromClubId:from.id,toClubId:to.id,fee:loan.loanFee??0,transferType:'LOAN'})
+  career.transferHistory??=[];loan.transferId??=`loan-${loan.id}`;const seasonId=career.offSeason?.nextSeason??career.season;career.transferHistory.unshift({id:loan.transferId,transferId:loan.transferId,playerId:player.id,playerName:player.name,seasonId,seasonNumber:seasonId,date:career.careerDate,fromClubId:from.id,toClubId:to.id,fee:loan.loanFee??0,transferType:'LOAN'})
   repairTeamLineup(career,from);repairTeamLineup(career,to)
   addInboxEvent(career,{id:`loan-active-${loan.id}`,type:'LOAN',playerId:player.id,loanId:loan.id,text:`${player.name} has joined ${to.name} on loan from ${from.name}.`})
   return true
@@ -670,7 +675,7 @@ function completeLoanPurchase(career,loan){
   player.status='CONTRACTED';delete player.loanId;delete player.loanParentClubId;player.transferListed=false;player.loanListed=false
   player.contractYears=3;player.contractExpiry=career.season+3;player.contractExpiryDate=`${Number(career.careerDate.slice(0,4))+3}-06-30`;player.contractStatus='Active';player.squadRole='Rotation'
   loan.status='CONVERTED';loan.conversionDate=career.careerDate;loan.completedFee=fee
-  career.transferHistory??=[];const id=`loan-purchase-${loan.id}`;career.transferHistory.unshift({id,transferId:id,seasonId:career.season,seasonNumber:career.season,date:career.careerDate,playerId:player.id,playerName:player.name,position:player.position,fromClubId:parent.id,toClubId:buyer.id,fee,transferType:'PERMANENT'})
+  career.transferHistory??=[];const id=`loan-purchase-${loan.id}`,seasonId=career.offSeason?.nextSeason??career.season;career.transferHistory.unshift({id,transferId:id,seasonId,seasonNumber:seasonId,date:career.careerDate,playerId:player.id,playerName:player.name,position:player.position,fromClubId:parent.id,toClubId:buyer.id,fee,transferType:'PERMANENT'})
   addInboxEvent(career,{id:`${id}-event`,type:'PLAYER TRANSFERRED',playerId:player.id,loanId:loan.id,text:`${player.name} joined ${buyer.name} permanently after the loan for ${moneySafe(fee)}.`})
   return true
 }
@@ -833,14 +838,16 @@ export function advanceCareerDay(career, { simulateManagedFixture = false, inclu
   processContractDates(career)
   runAiClubManagement(career)
   updateCurrentMatchday(career)
-  if(career.fixtures.length&&career.fixtures.every(fixture=>fixture.status==='played'))startNextSeason(career)
+  let seasonStarted=false
+  if(career.fixtures.length&&career.fixtures.every(fixture=>fixture.status==='played')&&career.seasonStatus!=='OFF_SEASON')completeSeason(career)
+  if(career.seasonStatus==='OFF_SEASON'&&career.careerDate>=career.offSeason.startDate){seasonStarted=startNextSeason(career).ok}
   const newInbox = career.inbox.slice(0, Math.max(0, career.inbox.length - inboxBefore))
   const incomingOfferArrived = career.inbox.some(event => event.date === career.careerDate && event.offerId)
-  const important = Boolean(userFixture || responseEvents.length || scheduledEvents.some(event => event.important) ||
+  const important = Boolean(seasonStarted || userFixture || responseEvents.length || scheduledEvents.some(event => event.important) ||
     newInbox.some(event => ['TRANSFER OFFER', 'RELEASE CLAUSE TRIGGERED', 'CONTRACT WARNING', 'CONTRACT EXPIRED', 'LOAN', 'PLAYER DECISION'].includes(event.type)) ||
     incomingOfferArrived)
-  const reason = userFixture ? 'MATCHDAY' : responseEvents.length ? 'TRANSFER_RESPONSE' : scheduledEvents.some(event => event.important) ? 'CAREER_EVENT' : newInbox.some(event => ['CONTRACT WARNING', 'CONTRACT EXPIRED'].includes(event.type)) || incomingOfferArrived ? 'CAREER_EVENT' : null
-  return { ok: true, date: career.careerDate, fixturesSimulated: fixtures.length, userFixture, responseEvents, scheduledEvents, important, reason }
+  const reason = seasonStarted?'SEASON_START':userFixture ? 'MATCHDAY' : responseEvents.length ? 'TRANSFER_RESPONSE' : scheduledEvents.some(event => event.important) ? 'CAREER_EVENT' : newInbox.some(event => ['CONTRACT WARNING', 'CONTRACT EXPIRED'].includes(event.type)) || incomingOfferArrived ? 'CAREER_EVENT' : null
+  return { ok: true, date: career.careerDate, fixturesSimulated: fixtures.length, userFixture, responseEvents, scheduledEvents, important, reason, seasonStarted }
 }
 
 // Uses the same calendar day processing and quick-match rules as normal career advancement.
@@ -1094,7 +1101,7 @@ export function applyManagedMatch(career, fixtureId, match) {
     else career.inbox.unshift({id:review.id,type:'BOARD REVIEW',date:career.careerDate,text:`Board confidence ${review.change>=0?'increased':'decreased'} by ${Math.abs(review.change)} after the match.`})
   }
   updateCurrentMatchday(career)
-  if(career.fixtures.every(item=>item.status==='played'))startNextSeason(career)
+  if(career.fixtures.every(item=>item.status==='played')&&career.seasonStatus!=='OFF_SEASON')completeSeason(career)
   return true
 }
 export function negotiateBoardExpectations(career, option) {
@@ -1166,8 +1173,18 @@ export function loadCareer(slot = null) {
 }
 export function extendPlayerContract(career, playerId, years) {
   const player = career?.players?.[playerId]
-  const duration = Number(years)
+  const terms=years&&typeof years==='object'?years:{years}
+  const duration = Number(terms.years)
   if (!player || !Number.isInteger(duration) || duration < 1 || duration > 5) return { ok: false, message: 'Choose a contract length from one to five seasons.' }
+  const club=career.teams.find(team=>team.roster.includes(playerId))
+  const wage=terms.salaryWeekly==null?player.salaryWeekly:Math.round(Number(terms.salaryWeekly))
+  const clause=terms.releaseClause==null?player.releaseClause:Math.round(Number(terms.releaseClause))
+  if(!Number.isSafeInteger(wage)||wage<0||!Number.isSafeInteger(clause)||clause<0)return {ok:false,message:'Enter valid wage and release-clause values.'}
+  if(club&&wage>player.salaryWeekly&&club.wageSpend+(wage-player.salaryWeekly)>club.wageBudget)return {ok:false,message:'The proposed wage exceeds the available wage budget.'}
+  if(club)club.wageSpend=Math.max(0,club.wageSpend+(wage-(player.salaryWeekly??0)))
+  player.salaryWeekly=player.wage=wage
+  player.releaseClause=clause
+  if(terms.squadRole)player.squadRole=terms.squadRole
   player.contractYears = duration
   player.contractExpiryDate = `${Number(career.careerDate.slice(0, 4)) + duration}-06-30`
   player.contractExpiry = (career.season ?? 1) + duration
@@ -1256,7 +1273,8 @@ export function transferPlayer(career, playerId, buyingTeamId, fee = null, contr
   if(seller)syncBench(seller);repairTeamLineup(career,buyer);syncBench(buyer)
   career.transferHistory??=[]
   const transferId=`transfer-${career.season}-${career.careerDate}-${playerId}-${seller?.id??'free'}-${buyer.id}`
-  if(!career.transferHistory.some(item=>item.transferId===transferId||item.id===transferId))career.transferHistory.unshift({id:transferId,transferId,seasonId:career.season,seasonNumber:career.season,date:career.careerDate,playerId,playerName:player.name,position:player.position,fromClubId:seller?.id??null,toClubId:buyer.id,fee:freeAgent?0:transferFee,transferType:freeAgent?'FREE_AGENT':'PERMANENT'})
+  const transferSeason=career.offSeason?.nextSeason??career.season
+  if(!career.transferHistory.some(item=>item.transferId===transferId||item.id===transferId))career.transferHistory.unshift({id:transferId,transferId,seasonId:transferSeason,seasonNumber:transferSeason,date:career.careerDate,playerId,playerName:player.name,position:player.position,fromClubId:seller?.id??null,toClubId:buyer.id,fee:freeAgent?0:transferFee,transferType:freeAgent?'FREE_AGENT':'PERMANENT'})
   career.freeAgents=(career.freeAgents??[]).filter(id=>id!==playerId)
   shortlistNotice(career,player,'TRANSFER',`${player.name} moved from ${seller?.name??'Free agents'} to ${buyer.name}.`)
   career.inbox.unshift({id:transferId,type:'TRANSFER',date:career.careerDate,text:`${player.name} joined ${buyer.name}${seller?` from ${seller.name}`:' as a free agent'}.`})
@@ -1469,10 +1487,9 @@ export function conductBoardReview(career) {
   return {ok:true,review:career.lastBoardReview}
 }
 
-export function startNextSeason(career) {
-  if(!career.fixtures.every(fixture=>fixture.status==='played'))return {ok:false,message:'The current season is not complete.'}
-  career.careerDate=careerSeasonEndDate(career.careerDate??INITIAL_CAREER_DATE)
-  processContractDates(career)
+export function completeSeason(career) {
+  if(!career?.fixtures?.length||!career.fixtures.every(fixture=>fixture.status==='played'))return {ok:false,message:'The current season is not complete.'}
+  if(career.offSeason?.completedSeason===career.season)return {ok:true,offSeason:career.offSeason}
   if(career.lastBoardReview?.season!==career.season)conductBoardReview(career)
   career.playerSeasonClubStats??=[]
   career.seasonHistory??=[]
@@ -1480,17 +1497,25 @@ export function startNextSeason(career) {
   career.seasonHistory.unshift({season:career.season,date:career.careerDate,standings:table.map((team,index)=>({teamId:team.id,position:index+1,table:{...team.table}})),playerStats:Object.values(career.players).filter(player=>player.seasonStats?.appearances).map(player=>({playerId:player.id,season:career.season,stats:{...player.seasonStats}})),review:career.lastBoardReview,clubFinances:career.teams.map(team=>({teamId:team.id,...structuredClone(team.finances)}))})
   if(career.seasonHistory.length>20)career.seasonHistory.length=20
   for(const player of Object.values(career.players))closePlayerSeasonClubSegment(career,player.id,career.careerDate)
+  career.offSeason={completedSeason:career.season,nextSeason:career.season+1,startedAt:career.careerDate,startDate:nextSeasonKickoffDate(career.careerDate)}
+  career.seasonStatus='OFF_SEASON'
+  career.teams.forEach(team=>{team.finances.seasonIncome=0;team.finances.seasonExpenses=0;team.finances.seasonProfit=0;team.finances.categories={income:{matchday:0,sponsorship:0,broadcasting:0,prizeMoney:0,transfers:0,commercial:0},expenses:{transfers:0,wages:0,other:0}}})
+  return {ok:true,offSeason:career.offSeason}
+}
+
+export function startNextSeason(career) {
+  if(!career?.offSeason||career.seasonStatus!=='OFF_SEASON')return {ok:false,message:'The career is not in the off-season.'}
+  if(career.careerDate<career.offSeason.startDate)return {ok:false,message:`The new season starts on ${career.offSeason.startDate}.`}
   career.season++
   career.currentMatchday=1
   career.fixtures=makeFixtures(career.teams,career.season,career.careerDate)
   career.teams.forEach(team=>{
     team.table={played:0,wins:0,draws:0,losses:0,gf:0,ga:0,points:0}
-    team.finances.seasonIncome=0;team.finances.seasonExpenses=0;team.finances.seasonProfit=0
-    team.finances.categories={income:{matchday:0,sponsorship:0,broadcasting:0,prizeMoney:0,transfers:0,commercial:0},expenses:{transfers:0,wages:0,other:0}}
     team.board.expectation=createBoard(team).expectation;team.board.negotiationUsed=false;team.board.fired=false
     team.board.objectives=[]
   })
   Object.values(career.players).forEach(player=>{player.seasonStats=blankSeasonStats();player.appearances=0;const expiry=player.contractExpiryDate??dateFromExpirySeason(career,player.contractExpiry);const days=Math.ceil((utcDate(expiry)-utcDate(career.careerDate))/86400000);player.contractStatus=days<=0?'Expired':days<=30?'Expiring Soon':'Active';player.fitness=Math.min(100,(player.fitness??80)+15)})
   career.lastResult=null;career.currentMatchFixtureId=null
+  career.offSeason=null;career.seasonStatus='ACTIVE'
   return {ok:true,season:career.season}
 }

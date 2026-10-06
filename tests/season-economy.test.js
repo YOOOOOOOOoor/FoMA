@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { calculatePlayerMarketValue, conductBoardReview, createCareer, loadCareer, saveCareer, simulateCareerToSeasonEnd } from '../src/management/career.js'
+import { calculatePlayerMarketValue, conductBoardReview, createCareer, loadCareer, saveCareer, simulateCareerToSeasonEnd, advanceCareerDay, startNextSeason } from '../src/management/career.js'
 
 test('market valuation reflects quality, upside, age and club tier',()=>{
   const club={strength:82}
@@ -38,7 +38,7 @@ test('board confidence responds deterministically to finishing position against 
   assert.ok(success.review.objectives.some(item=>item.key.startsWith('vision-')))
 })
 
-test('Sim to End archives season standings, stats and finances before creating season two',async()=>{
+test('Sim to End archives season standings, stats and finances and waits for the season two kickoff',async()=>{
   const career=createCareer(293,'premier-league')
   career.managedTeamId=career.teams[0].id
   const player=career.players[career.teams[0].roster[0]]
@@ -50,14 +50,22 @@ test('Sim to End archives season standings, stats and finances before creating s
   const before=career.teams[0].board.confidence
   const result=await simulateCareerToSeasonEnd(career)
   assert.equal(result.ok,true)
-  assert.equal(career.season,2)
+  assert.equal(career.season,1)
+  assert.equal(career.seasonStatus,'OFF_SEASON')
+  assert.ok(career.offSeason.startDate)
   assert.equal(career.seasonHistory[0].season,1)
   assert.equal(career.seasonHistory[0].standings.length,career.teams.length)
   assert.equal(career.seasonHistory[0].playerStats.find(item=>item.playerId===player.id)?.stats.appearances,3)
-  assert.equal(player.seasonStats.appearances,0)
+  assert.equal(player.seasonStats.appearances,3)
   assert.notEqual(career.teams[0].board.confidence,before)
   assert.ok(career.teams[0].finances.transactions.some(item=>item.category==='wages'))
   assert.ok(career.teams[0].finances.transactions.some(item=>item.category==='sponsorship'))
+  assert.equal(career.fixtures.every(item=>item.season===1&&item.status==='played'),true)
+  const blocked=startNextSeason(career)
+  assert.equal(blocked.ok,false)
+  while(career.careerDate<career.offSeason.startDate)advanceCareerDay(career,{simulateManagedFixture:true})
+  assert.equal(career.season,2)
+  assert.equal(career.seasonStatus,'ACTIVE')
   assert.equal(career.fixtures.every(item=>item.season===2&&item.status==='scheduled'),true)
   const prior=globalThis.localStorage,store=new Map()
   globalThis.localStorage={getItem:key=>store.get(key)??null,setItem:(key,value)=>store.set(key,value),removeItem:key=>store.delete(key)}

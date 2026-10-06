@@ -108,7 +108,7 @@ test('unlisted shortlisted player uses the existing release-clause negotiation p
   assert.equal(career.activeNegotiation.agreedFee,player.releaseClause)
 })
 
-test('full career simulation rolls over once and archives the completed season',async()=>{
+test('full career simulation preserves the completed season until the off-season kickoff',async()=>{
   const career=createCareer(218,'premier-league')
   career.managedTeamId=career.teams[0].id
   career.careerDate=career.fixtures[0].scheduledDate
@@ -118,7 +118,9 @@ test('full career simulation rolls over once and archives the completed season',
   const result=await simulateCareerToSeasonEnd(career)
   assert.equal(result.ok,true)
   assert.equal(result.completedSeason,1)
-  assert.equal(career.season,2)
+  assert.equal(career.season,1)
+  assert.equal(career.seasonStatus,'OFF_SEASON')
+  assert.equal(career.fixtures.every(fixture=>fixture.season===1&&fixture.status==='played'),true)
   assert.equal(career.seasonHistory[0].season,1)
   assert.equal(career.fixtures.some(fixture=>fixture.season===2&&fixture.status==='scheduled'),true)
   assert.equal(new Set(career.completedMatches.map(match=>match.fixtureId)).size,firstSeasonFixtures.length)
