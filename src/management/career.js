@@ -865,6 +865,7 @@ export async function simulateCareerToSeasonEnd(career, onProgress = () => {}) {
     onProgress({ date: career.careerDate, daysAdvanced, played: career.season===completedSeason?career.fixtures.filter(fixture => fixture.status === 'played').length:total, total })
     await new Promise(resolve => setTimeout(resolve, 0))
   }
+  if(career.season===completedSeason&&career.fixtures.every(fixture=>fixture.status==='played'))completeSeason(career)
   return { ok: true, date: career.careerDate, daysAdvanced, played:total, total, completedSeason, season:career.season }
 }
 

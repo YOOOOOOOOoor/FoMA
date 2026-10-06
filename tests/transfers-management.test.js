@@ -122,7 +122,7 @@ test('full career simulation preserves the completed season until the off-season
   assert.equal(career.seasonStatus,'OFF_SEASON')
   assert.equal(career.fixtures.every(fixture=>fixture.season===1&&fixture.status==='played'),true)
   assert.equal(career.seasonHistory[0].season,1)
-  assert.equal(career.fixtures.some(fixture=>fixture.season===2&&fixture.status==='scheduled'),true)
+  assert.equal(career.fixtures.some(fixture=>fixture.season===2&&fixture.status==='scheduled'),false)
   assert.equal(new Set(career.completedMatches.map(match=>match.fixtureId)).size,firstSeasonFixtures.length)
   for(const fixture of firstSeasonFixtures){
     assert.ok(fixture.result.homeGoals>=0&&fixture.result.awayGoals>=0)

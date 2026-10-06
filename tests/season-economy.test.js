@@ -63,7 +63,8 @@ test('Sim to End archives season standings, stats and finances and waits for the
   assert.equal(career.fixtures.every(item=>item.season===1&&item.status==='played'),true)
   const blocked=startNextSeason(career)
   assert.equal(blocked.ok,false)
-  while(career.careerDate<career.offSeason.startDate)advanceCareerDay(career,{simulateManagedFixture:true})
+  const kickoffDate=career.offSeason.startDate
+  while(career.careerDate<kickoffDate)advanceCareerDay(career,{simulateManagedFixture:true})
   assert.equal(career.season,2)
   assert.equal(career.seasonStatus,'ACTIVE')
   assert.equal(career.fixtures.every(item=>item.season===2&&item.status==='scheduled'),true)
